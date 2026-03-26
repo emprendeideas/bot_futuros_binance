@@ -220,7 +220,7 @@ def on_message(ws, message):
 
 def on_open(ws):
     print("✅ WS conectado", flush=True)
-    enviar_telegram("✅ Bot conectado a Binance")
+    enviar_telegram("✅ Conexión a Binance Exitosa")
 
 def on_close(ws, *args):
     print("❌ WS cerrado", flush=True)
@@ -260,9 +260,9 @@ def iniciar_ws():
 # 🚀 MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 Bot Trading iniciado en Render", flush=True)
+    print("🚀 BOT BINANCE FUTUROS INICIADO", flush=True)
 
-    enviar_telegram("🚀 Bot desplegado en Render y funcionando")
+    enviar_telegram("🚀 BOT BINANCE FUTUROS INICIADO")
 
     iniciar_web()   # 🔥 clave para mantener vivo
     iniciar_ws()    # 🔥 loop infinito WS
