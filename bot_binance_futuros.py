@@ -182,7 +182,7 @@ def calcular_senal():
     mavi = TMA1
     kirmizi = TMA2
 
-    i = len(mavi) - 1
+    i = len(mavi) - 2
 
     # 🔥 CRUCE REAL
     cruce_up = mavi[i] > kirmizi[i] and mavi[i-1] <= kirmizi[i-1]
