@@ -2,6 +2,7 @@ import websocket
 import json
 import requests
 import time
+import sys
 import os
 import threading
 import socket
@@ -19,14 +20,15 @@ def guardar_estado():
         "precio_entrada": precio_entrada,
         "trades": trades,
         "ganadas": ganadas,
-        "perdidas": perdidas
+        "perdidas": perdidas,
+        "trend": trend
     }
     with open(STATE_FILE, "w") as f:
         json.dump(estado, f)
 
 def cargar_estado():
     global capital, posicion, precio_entrada
-    global trades, ganadas, perdidas
+    global trades, ganadas, perdidas, trend
 
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, "r") as f:
@@ -38,44 +40,27 @@ def cargar_estado():
         trades = estado.get("trades", 0)
         ganadas = estado.get("ganadas", 0)
         perdidas = estado.get("perdidas", 0)
+        trend = estado.get("trend", 0)
 
         print("✅ Estado restaurado", flush=True)
     else:
-        print("⚠️ No hay estado previo", flush=True)
+        print("⚠️ No hay estado previo, iniciando limpio", flush=True)
 
 # =========================
-# 🔥 HISTORIAL (CLAVE)
-# =========================
-def cargar_historial():
-    global klines
-
-    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={SYMBOL.upper()}&interval={INTERVAL}&limit=150"
-    data = requests.get(url).json()
-
-    klines.clear()
-
-    for k in data:
-        klines.append({
-            "open": float(k[1]),
-            "high": float(k[2]),
-            "low": float(k[3]),
-            "close": float(k[4]),
-            "closed": True
-        })
-
-    print("✅ Historial cargado", flush=True)
-
-# =========================
-# 🌐 WEB
+# 🌐 WEB (ANTI-SLEEP)
 # =========================
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Bot activo"
+    return "Bot Trading Activo 🚀"
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
 
 def iniciar_web():
-    t = threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))))
+    t = threading.Thread(target=run_web)
     t.daemon = True
     t.start()
 
@@ -96,26 +81,34 @@ SYMBOL = "adausdt"
 INTERVAL = "1m"
 
 CAPITAL_INICIAL = 50.0
+APALANCAMIENTO = 1
+COMISION = 0.0004
 STOP_LOSS = -1.35
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
+if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+    raise ValueError("❌ Falta TELEGRAM_TOKEN o TELEGRAM_CHAT_ID")
+
 # =========================
 # 📲 TELEGRAM
 # =========================
 def enviar_telegram(msg):
+    while not internet_disponible():
+        time.sleep(5)
+
     try:
-        requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-            data={"chat_id": TELEGRAM_CHAT_ID, "text": msg},
-            timeout=10
-        )
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        requests.post(url, data={
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": msg
+        }, timeout=10)
     except:
         pass
 
 # =========================
-# 📊 ESTADO
+# 📊 ESTADO GLOBAL
 # =========================
 capital = CAPITAL_INICIAL
 posicion = None
@@ -126,6 +119,7 @@ ganadas = 0
 perdidas = 0
 
 trend = 0
+
 klines = []
 
 # =========================
@@ -142,7 +136,7 @@ def ema(src, length):
     return ema_vals
 
 # =========================
-# 🧠 INDICADOR (CLON TV)
+# 🧠 INDICADOR (CORREGIDO)
 # =========================
 def calcular_senal():
     global trend
@@ -186,6 +180,9 @@ def calcular_senal():
     confirm_up = mavi[i] > mavi[i-1]
     confirm_down = mavi[i] < mavi[i-1]
 
+    if len(mavi) < 30:
+        return None
+
     dist_series = [abs(mavi[j]-kirmizi[j]) for j in range(len(mavi))]
     dist_media = sum(dist_series[-30:]) / 30
 
@@ -195,12 +192,12 @@ def calcular_senal():
     señal = None
 
     if cruce_up and confirm_up and filtro and trend != 1:
-        señal = "BUY"
         trend = 1
+        señal = "BUY"
 
     elif cruce_down and confirm_down and filtro and trend != -1:
-        señal = "SELL"
         trend = -1
+        señal = "SELL"
 
     return señal
 
@@ -215,14 +212,17 @@ def calcular_pnl(precio):
     return 0
 
 # =========================
-# 🔌 WS
+# 🔌 WS EVENTOS
 # =========================
 def on_message(ws, message):
     global klines, posicion, precio_entrada, capital
     global trades, ganadas, perdidas
 
-    data = json.loads(message)
-    k = data['k']
+    try:
+        data = json.loads(message)
+        k = data['k']
+    except:
+        return
 
     candle = {
         "open": float(k["o"]),
@@ -234,7 +234,7 @@ def on_message(ws, message):
 
     if len(klines) == 0 or candle["closed"]:
         klines.append(candle)
-        if len(klines) > 150:
+        if len(klines) > 100:
             klines.pop(0)
     else:
         klines[-1] = candle
@@ -248,8 +248,10 @@ def on_message(ws, message):
             capital *= (1 + pnl/100)
             posicion = None
             perdidas += 1
+
             guardar_estado()
-            enviar_telegram(f"STOP LOSS {pnl:.2f}%")
+
+            enviar_telegram(f"🛑 STOP LOSS {pnl:.2f}%\n💰 Capital: {capital:.2f}")
 
         if señal:
             if posicion:
@@ -262,22 +264,37 @@ def on_message(ws, message):
 
                 trades += 1
 
+                enviar_telegram(
+                    f"💰 Cierre operación\n"
+                    f"Resultado: {pnl:.2f}%\n"
+                    f"Capital: {capital:.2f}\n"
+                    f"Trades: {trades}"
+                )
+
             posicion = "LONG" if señal == "BUY" else "SHORT"
             precio_entrada = precio
 
             guardar_estado()
 
-            enviar_telegram(f"{señal} {precio}")
+            enviar_telegram(
+                f"🚀 NUEVA SEÑAL\n"
+                f"Tipo: {posicion}\n"
+                f"Precio: {precio}"
+            )
 
+# =========================
+# 🔌 EVENTOS WS
+# =========================
 def on_open(ws):
-    print("WS conectado")
+    print("✅ WS conectado", flush=True)
     enviar_telegram("✅ Conexión a Binance Exitosa")
 
 def on_close(ws, *args):
-    print("WS cerrado")
+    print("❌ WS cerrado", flush=True)
+    enviar_telegram("❌ WS cerrado, reconectando...")
 
 def on_error(ws, error):
-    print("Error:", error)
+    print(f"⚠️ Error WS: {error}", flush=True)
 
 # =========================
 # 🔁 LOOP
@@ -296,18 +313,16 @@ def iniciar_ws():
             )
             ws.run_forever()
         except:
+            print("⚠️ Error conexión, reconectando...", flush=True)
             time.sleep(5)
 
 # =========================
 # 🚀 MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT BINANCE FUTUROS INICIADO")
+    print("🚀 BOT BINANCE FUTUROS INICIADO", flush=True)
 
     cargar_estado()
-    trend = 0  # 🔥 importante
-
-    cargar_historial()
 
     enviar_telegram("🚀 BOT BINANCE FUTUROS INICIADO")
 
