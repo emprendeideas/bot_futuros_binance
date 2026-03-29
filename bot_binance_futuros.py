@@ -44,7 +44,7 @@ def cargar_estado():
         trend = estado.get("trend", 0)
         last_signal_bar = estado.get("last_signal_bar", -1)
 
-        print("✅ Estado restaurado", flush=True)
+        print("✅ Estado restaurado.", flush=True)
     else:
         last_signal_bar = -1
         print("⚠️ No hay estado previo, iniciando limpio", flush=True)
