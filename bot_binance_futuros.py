@@ -78,7 +78,7 @@ def internet_disponible():
 # ⚙️ CONFIG
 # =========================
 SYMBOL = "adausdt"
-INTERVAL = "5m"
+INTERVAL = "1m"
 
 CAPITAL_INICIAL = 50.0
 APALANCAMIENTO = 1
