@@ -209,14 +209,17 @@ def calcular_pnl(precio):
     return 0
 
 # =========================
-# 🔌 WS
+# 🔌 WS EVENTOS
 # =========================
 def on_message(ws, message):
     global klines, posicion, precio_entrada, capital
     global trades, ganadas, perdidas
 
-    data = json.loads(message)
-    k = data['k']
+    try:
+        data = json.loads(message)
+        k = data['k']
+    except:
+        return
 
     candle = {
         "open": float(k["o"]),
@@ -226,6 +229,7 @@ def on_message(ws, message):
         "closed": k["x"]
     }
 
+    # Construcción de velas
     if len(klines) == 0 or candle["closed"]:
         klines.append(candle)
         if len(klines) > 100:
@@ -233,20 +237,29 @@ def on_message(ws, message):
     else:
         klines[-1] = candle
 
+    # Solo operar en vela cerrada (igual que TradingView)
     if candle["closed"]:
         precio = candle["close"]
         pnl = calcular_pnl(precio)
         señal = calcular_senal()
 
+        # =========================
+        # 🛑 STOP LOSS
+        # =========================
         if posicion and pnl <= STOP_LOSS:
             capital *= (1 + pnl/100)
             posicion = None
             perdidas += 1
 
             guardar_estado()
-            enviar_telegram(f"🛑 STOP LOSS {pnl:.2f}% | Capital: {capital:.2f}")
 
+            enviar_telegram(f"🛑 STOP LOSS {pnl:.2f}%\n💰 Capital: {capital:.2f}")
+
+        # =========================
+        # 🚀 SEÑALES
+        # =========================
         if señal:
+            # Cerrar operación anterior
             if posicion:
                 capital *= (1 + pnl/100)
 
@@ -257,14 +270,39 @@ def on_message(ws, message):
 
                 trades += 1
 
-                enviar_telegram(f"💰 Cierre {pnl:.2f}% | Capital: {capital:.2f}")
+                enviar_telegram(
+                    f"💰 Cierre operación\n"
+                    f"Resultado: {pnl:.2f}%\n"
+                    f"Capital: {capital:.2f}\n"
+                    f"Trades: {trades}"
+                )
 
+            # Abrir nueva operación
             posicion = "LONG" if señal == "BUY" else "SHORT"
             precio_entrada = precio
 
             guardar_estado()
 
-            enviar_telegram(f"🚀 {posicion} {precio}")
+            enviar_telegram(
+                f"🚀 NUEVA SEÑAL\n"
+                f"Tipo: {posicion}\n"
+                f"Precio: {precio}"
+            )
+
+
+# =========================
+# 🔌 EVENTOS WS
+# =========================
+def on_open(ws):
+    print("✅ WS conectado", flush=True)
+    enviar_telegram("✅ Conexión a Binance Exitosa")
+
+def on_close(ws, *args):
+    print("❌ WS cerrado", flush=True)
+    enviar_telegram("❌ WS cerrado, reconectando...")
+
+def on_error(ws, error):
+    print(f"⚠️ Error WS: {error}", flush=True)
 
 # =========================
 # 🔁 LOOP
@@ -276,21 +314,25 @@ def iniciar_ws():
         try:
             ws = websocket.WebSocketApp(
                 socket_url,
-                on_message=on_message
+                on_message=on_message,
+                on_open=on_open,
+                on_close=on_close,
+                on_error=on_error
             )
             ws.run_forever()
         except:
+            print("⚠️ Error conexión, reconectando...", flush=True)
             time.sleep(5)
 
 # =========================
 # 🚀 MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT INICIADO", flush=True)
+    print("🚀 BOT BINANCE FUTUROS INICIADO", flush=True)
 
     cargar_estado()  # 🔥 CLAVE
 
-    enviar_telegram("🚀 BOT REINICIADO CON MEMORIA")
+    enviar_telegram("🚀 BOT BINANCE FUTUROS INICIADO")
 
     iniciar_web()
     iniciar_ws()
