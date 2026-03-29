@@ -157,7 +157,7 @@ def calcular_senal():
 
     haC = [(ohlc4[i] + haOpen[i] + max(high[i],haOpen[i]) + min(low[i],haOpen[i]))/4 for i in range(len(close))]
 
-    L = 38
+    L = 2
 
     EMA1 = ema(haC,L)
     EMA2 = ema(EMA1,L)
