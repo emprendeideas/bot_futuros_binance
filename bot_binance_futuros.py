@@ -21,14 +21,15 @@ def guardar_estado():
         "trades": trades,
         "ganadas": ganadas,
         "perdidas": perdidas,
-        "trend": trend
+        "trend": trend,
+        "last_signal_bar": last_signal_bar
     }
     with open(STATE_FILE, "w") as f:
         json.dump(estado, f)
 
 def cargar_estado():
     global capital, posicion, precio_entrada
-    global trades, ganadas, perdidas, trend
+    global trades, ganadas, perdidas, trend, last_signal_bar
 
     if os.path.exists(STATE_FILE):
         with open(STATE_FILE, "r") as f:
@@ -41,9 +42,11 @@ def cargar_estado():
         ganadas = estado.get("ganadas", 0)
         perdidas = estado.get("perdidas", 0)
         trend = estado.get("trend", 0)
+        last_signal_bar = estado.get("last_signal_bar", -1)
 
         print("✅ Estado restaurado", flush=True)
     else:
+        last_signal_bar = -1
         print("⚠️ No hay estado previo, iniciando limpio", flush=True)
 
 # =========================
@@ -81,8 +84,6 @@ SYMBOL = "adausdt"
 INTERVAL = "1m"
 
 CAPITAL_INICIAL = 50.0
-APALANCAMIENTO = 1
-COMISION = 0.0004
 STOP_LOSS = -1.35
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -119,11 +120,12 @@ ganadas = 0
 perdidas = 0
 
 trend = 0
+last_signal_bar = -1
 
 klines = []
 
 # =========================
-# 📈 EMA
+# 📈 EMA EXACTA
 # =========================
 def ema(src, length):
     ema_vals = []
@@ -136,10 +138,10 @@ def ema(src, length):
     return ema_vals
 
 # =========================
-# 🧠 INDICADOR (CORREGIDO)
+# 🧠 INDICADOR IGUAL A TV
 # =========================
 def calcular_senal():
-    global trend
+    global trend, last_signal_bar
 
     if len(klines) < 50:
         return None
@@ -149,21 +151,29 @@ def calcular_senal():
     low = [k["low"] for k in klines]
     open_ = [k["open"] for k in klines]
 
+    # 🔥 OHLC4
     ohlc4 = [(o+h+l+c)/4 for o,h,l,c in zip(open_,high,low,close)]
 
-    haOpen = [ohlc4[0]]
-    for i in range(1,len(ohlc4)):
-        haOpen.append((ohlc4[i] + haOpen[i-1]) / 2)
+    # 🔥 haOpen EXACTO (igual que Pine)
+    haOpen = [0.0] * len(ohlc4)
+    for i in range(len(ohlc4)):
+        if i == 0:
+            haOpen[i] = (ohlc4[i] + 0) / 2
+        else:
+            haOpen[i] = (ohlc4[i] + haOpen[i-1]) / 2
 
+    # 🔥 haClose
     haC = [(ohlc4[i] + haOpen[i] + max(high[i],haOpen[i]) + min(low[i],haOpen[i]))/4 for i in range(len(close))]
 
     L = 2
 
+    # 🔥 TMA1
     EMA1 = ema(haC,L)
     EMA2 = ema(EMA1,L)
     EMA3 = ema(EMA2,L)
     TMA1 = [3*EMA1[i]-3*EMA2[i]+EMA3[i] for i in range(len(close))]
 
+    # 🔥 TMA2
     EMA4 = ema(TMA1,L)
     EMA5 = ema(EMA4,L)
     EMA6 = ema(EMA5,L)
@@ -172,32 +182,39 @@ def calcular_senal():
     mavi = TMA1
     kirmizi = TMA2
 
-    i = -1
+    i = len(mavi) - 1
 
+    # 🔥 CRUCE REAL
     cruce_up = mavi[i] > kirmizi[i] and mavi[i-1] <= kirmizi[i-1]
     cruce_down = mavi[i] < kirmizi[i] and mavi[i-1] >= kirmizi[i-1]
 
+    # 🔥 CONFIRMACIÓN
     confirm_up = mavi[i] > mavi[i-1]
     confirm_down = mavi[i] < mavi[i-1]
 
-    if len(mavi) < 30:
-        return None
-
+    # 🔥 FILTRO VOLATILIDAD
     dist_series = [abs(mavi[j]-kirmizi[j]) for j in range(len(mavi))]
     dist_media = sum(dist_series[-30:]) / 30
-
     dist = abs(mavi[i] - kirmizi[i])
     filtro = dist > dist_media * 0.3
 
     señal = None
 
+    # 🔥 EVITAR DUPLICADOS POR VELA
+    current_bar = len(klines)
+
+    if current_bar == last_signal_bar:
+        return None
+
     if cruce_up and confirm_up and filtro and trend != 1:
         trend = 1
         señal = "BUY"
+        last_signal_bar = current_bar
 
     elif cruce_down and confirm_down and filtro and trend != -1:
         trend = -1
         señal = "SELL"
+        last_signal_bar = current_bar
 
     return señal
 
@@ -232,18 +249,24 @@ def on_message(ws, message):
         "closed": k["x"]
     }
 
-    if len(klines) == 0 or candle["closed"]:
+    # 🔥 ACTUALIZACIÓN CORRECTA DE VELAS
+    if len(klines) == 0:
         klines.append(candle)
-        if len(klines) > 100:
-            klines.pop(0)
     else:
-        klines[-1] = candle
+        if candle["closed"]:
+            klines.append(candle)
+            if len(klines) > 100:
+                klines.pop(0)
+        else:
+            klines[-1] = candle
 
+    # 🔥 SOLO VELA CERRADA (IGUAL TV)
     if candle["closed"]:
         precio = candle["close"]
         pnl = calcular_pnl(precio)
         señal = calcular_senal()
 
+        # STOP LOSS
         if posicion and pnl <= STOP_LOSS:
             capital *= (1 + pnl/100)
             posicion = None
@@ -253,6 +276,7 @@ def on_message(ws, message):
 
             enviar_telegram(f"🛑 STOP LOSS {pnl:.2f}%\n💰 Capital: {capital:.2f}")
 
+        # NUEVA SEÑAL
         if señal:
             if posicion:
                 capital *= (1 + pnl/100)
