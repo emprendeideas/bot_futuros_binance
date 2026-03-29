@@ -9,7 +9,45 @@ import socket
 from flask import Flask
 
 # =========================
-# 🔥 SERVIDOR WEB (ANTI-SLEEP RENDER)
+# 🔥 ARCHIVO DE MEMORIA
+# =========================
+STATE_FILE = "estado_bot.json"
+
+def guardar_estado():
+    estado = {
+        "capital": capital,
+        "posicion": posicion,
+        "precio_entrada": precio_entrada,
+        "trades": trades,
+        "ganadas": ganadas,
+        "perdidas": perdidas,
+        "trend": trend
+    }
+    with open(STATE_FILE, "w") as f:
+        json.dump(estado, f)
+
+def cargar_estado():
+    global capital, posicion, precio_entrada
+    global trades, ganadas, perdidas, trend
+
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE, "r") as f:
+            estado = json.load(f)
+
+        capital = estado.get("capital", CAPITAL_INICIAL)
+        posicion = estado.get("posicion", None)
+        precio_entrada = estado.get("precio_entrada", 0)
+        trades = estado.get("trades", 0)
+        ganadas = estado.get("ganadas", 0)
+        perdidas = estado.get("perdidas", 0)
+        trend = estado.get("trend", 0)
+
+        print("✅ Estado restaurado", flush=True)
+    else:
+        print("⚠️ No hay estado previo, iniciando limpio", flush=True)
+
+# =========================
+# 🌐 WEB (ANTI-SLEEP)
 # =========================
 app = Flask(__name__)
 
@@ -27,7 +65,7 @@ def iniciar_web():
     t.start()
 
 # =========================
-# 🌐 CHECK INTERNET (CLAVE)
+# 🌐 INTERNET
 # =========================
 def internet_disponible():
     try:
@@ -47,7 +85,6 @@ APALANCAMIENTO = 1
 COMISION = 0.0004
 STOP_LOSS = -1.35
 
-# 🔐 ENV
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
@@ -55,25 +92,23 @@ if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
     raise ValueError("❌ Falta TELEGRAM_TOKEN o TELEGRAM_CHAT_ID")
 
 # =========================
-# 📲 TELEGRAM ROBUSTO
+# 📲 TELEGRAM
 # =========================
-def enviar_telegram(msg, preview=False):
+def enviar_telegram(msg):
     while not internet_disponible():
-        print("❌ Sin internet...", flush=True)
         time.sleep(5)
 
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         requests.post(url, data={
             "chat_id": TELEGRAM_CHAT_ID,
-            "text": msg,
-            "disable_web_page_preview": not preview
+            "text": msg
         }, timeout=10)
-    except Exception as e:
-        print(f"⚠️ Error Telegram: {e}", flush=True)
+    except:
+        pass
 
 # =========================
-# 📊 ESTADO
+# 📊 ESTADO GLOBAL
 # =========================
 capital = CAPITAL_INICIAL
 posicion = None
@@ -83,10 +118,12 @@ trades = 0
 ganadas = 0
 perdidas = 0
 
+trend = 0
+
 klines = []
 
 # =========================
-# 🧠 INDICADOR
+# 📈 EMA
 # =========================
 def ema(src, length):
     ema_vals = []
@@ -98,7 +135,12 @@ def ema(src, length):
             ema_vals.append(v*k + ema_vals[i-1]*(1-k))
     return ema_vals
 
+# =========================
+# 🧠 INDICADOR (CORREGIDO)
+# =========================
 def calcular_senal():
+    global trend
+
     if len(klines) < 50:
         return None
 
@@ -138,16 +180,23 @@ def calcular_senal():
     confirm_up = mavi[i] > mavi[i-1]
     confirm_down = mavi[i] < mavi[i-1]
 
-    dist = abs(mavi[i] - kirmizi[i])
-    dist_media = sum([abs(mavi[j]-kirmizi[j]) for j in range(-30,0)]) / 30
+    dist_series = [abs(mavi[j]-kirmizi[j]) for j in range(len(mavi))]
+    dist_media = sum(dist_series[-30:]) / 30
 
+    dist = abs(mavi[i] - kirmizi[i])
     filtro = dist > dist_media * 0.3
 
-    if cruce_up and confirm_up and filtro:
-        return "BUY"
-    elif cruce_down and confirm_down and filtro:
-        return "SELL"
-    return None
+    señal = None
+
+    if cruce_up and confirm_up and filtro and trend != 1:
+        trend = 1
+        señal = "BUY"
+
+    elif cruce_down and confirm_down and filtro and trend != -1:
+        trend = -1
+        señal = "SELL"
+
+    return señal
 
 # =========================
 # 💰 PNL
@@ -160,17 +209,14 @@ def calcular_pnl(precio):
     return 0
 
 # =========================
-# 🔌 WS EVENTOS
+# 🔌 WS
 # =========================
 def on_message(ws, message):
     global klines, posicion, precio_entrada, capital
     global trades, ganadas, perdidas
 
-    try:
-        data = json.loads(message)
-        k = data['k']
-    except:
-        return
+    data = json.loads(message)
+    k = data['k']
 
     candle = {
         "open": float(k["o"]),
@@ -192,15 +238,14 @@ def on_message(ws, message):
         pnl = calcular_pnl(precio)
         señal = calcular_senal()
 
-        # STOP LOSS
         if posicion and pnl <= STOP_LOSS:
             capital *= (1 + pnl/100)
             posicion = None
             perdidas += 1
 
+            guardar_estado()
             enviar_telegram(f"🛑 STOP LOSS {pnl:.2f}% | Capital: {capital:.2f}")
 
-        # SEÑAL
         if señal:
             if posicion:
                 capital *= (1 + pnl/100)
@@ -211,58 +256,41 @@ def on_message(ws, message):
                     perdidas += 1
 
                 trades += 1
+
                 enviar_telegram(f"💰 Cierre {pnl:.2f}% | Capital: {capital:.2f}")
 
             posicion = "LONG" if señal == "BUY" else "SHORT"
             precio_entrada = precio
 
+            guardar_estado()
+
             enviar_telegram(f"🚀 {posicion} {precio}")
 
-def on_open(ws):
-    print("✅ WS conectado", flush=True)
-    enviar_telegram("✅ Conexión a Binance Exitosa")
-
-def on_close(ws, *args):
-    print("❌ WS cerrado", flush=True)
-
-def on_error(ws, error):
-    print(f"⚠️ Error WS: {error}", flush=True)
-
 # =========================
-# 🔁 LOOP ROBUSTO (ANTI-CRASH)
+# 🔁 LOOP
 # =========================
 def iniciar_ws():
     socket_url = f"wss://fstream.binance.com/ws/{SYMBOL}@kline_{INTERVAL}"
 
     while True:
-        if not internet_disponible():
-            print("❌ Sin internet, reintentando...", flush=True)
-            time.sleep(5)
-            continue
-
         try:
             ws = websocket.WebSocketApp(
                 socket_url,
-                on_message=on_message,
-                on_open=on_open,
-                on_close=on_close,
-                on_error=on_error
+                on_message=on_message
             )
-            ws.run_forever(ping_interval=20, ping_timeout=10)
-
-        except Exception as e:
-            print(f"🔥 Error crítico: {e}", flush=True)
-
-        print("🔁 Reconectando en 5s...", flush=True)
-        time.sleep(5)
+            ws.run_forever()
+        except:
+            time.sleep(5)
 
 # =========================
 # 🚀 MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT BINANCE FUTUROS INICIADO", flush=True)
+    print("🚀 BOT INICIADO", flush=True)
 
-    enviar_telegram("🚀 BOT BINANCE FUTUROS INICIADO")
+    cargar_estado()  # 🔥 CLAVE
 
-    iniciar_web()   # 🔥 clave para mantener vivo
-    iniciar_ws()    # 🔥 loop infinito WS
+    enviar_telegram("🚀 BOT REINICIADO CON MEMORIA")
+
+    iniciar_web()
+    iniciar_ws()
