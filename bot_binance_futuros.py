@@ -138,6 +138,27 @@ def ema(src, length):
     return ema_vals
 
 # =========================
+# 📊 HISTÓRICO (FIX CLAVE)
+# =========================
+def cargar_historico():
+    global klines
+    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={SYMBOL.upper()}&interval={INTERVAL}&limit=100"
+
+    data = requests.get(url).json()
+
+    klines = []
+    for k in data:
+        klines.append({
+            "open": float(k[1]),
+            "high": float(k[2]),
+            "low": float(k[3]),
+            "close": float(k[4]),
+            "closed": True
+        })
+
+    print("📊 Histórico cargado", flush=True)
+
+# =========================
 # 🧠 INDICADOR IGUAL A TV
 # =========================
 def calcular_senal():
@@ -151,10 +172,8 @@ def calcular_senal():
     low = [k["low"] for k in klines]
     open_ = [k["open"] for k in klines]
 
-    # 🔥 OHLC4
     ohlc4 = [(o+h+l+c)/4 for o,h,l,c in zip(open_,high,low,close)]
 
-    # 🔥 haOpen EXACTO (igual que Pine)
     haOpen = [0.0] * len(ohlc4)
     for i in range(len(ohlc4)):
         if i == 0:
@@ -162,18 +181,15 @@ def calcular_senal():
         else:
             haOpen[i] = (ohlc4[i] + haOpen[i-1]) / 2
 
-    # 🔥 haClose
     haC = [(ohlc4[i] + haOpen[i] + max(high[i],haOpen[i]) + min(low[i],haOpen[i]))/4 for i in range(len(close))]
 
     L = 2
 
-    # 🔥 TMA1
     EMA1 = ema(haC,L)
     EMA2 = ema(EMA1,L)
     EMA3 = ema(EMA2,L)
     TMA1 = [3*EMA1[i]-3*EMA2[i]+EMA3[i] for i in range(len(close))]
 
-    # 🔥 TMA2
     EMA4 = ema(TMA1,L)
     EMA5 = ema(EMA4,L)
     EMA6 = ema(EMA5,L)
@@ -182,17 +198,14 @@ def calcular_senal():
     mavi = TMA1
     kirmizi = TMA2
 
-    i = len(mavi) - 2
+    i = -2  # 🔥 vela confirmada estilo TradingView
 
-    # 🔥 CRUCE REAL
     cruce_up = mavi[i] > kirmizi[i] and mavi[i-1] <= kirmizi[i-1]
     cruce_down = mavi[i] < kirmizi[i] and mavi[i-1] >= kirmizi[i-1]
 
-    # 🔥 CONFIRMACIÓN
     confirm_up = mavi[i] > mavi[i-1]
     confirm_down = mavi[i] < mavi[i-1]
 
-    # 🔥 FILTRO VOLATILIDAD
     dist_series = [abs(mavi[j]-kirmizi[j]) for j in range(len(mavi))]
     dist_media = sum(dist_series[-30:]) / 30
     dist = abs(mavi[i] - kirmizi[i])
@@ -200,21 +213,19 @@ def calcular_senal():
 
     señal = None
 
-    # 🔥 EVITAR DUPLICADOS POR VELA
-    current_bar = len(klines)
-
-    if current_bar == last_signal_bar:
+    # 🔥 FIX REAL (anti duplicados correcto)
+    if last_signal_bar == len(klines) - 1:
         return None
 
     if cruce_up and confirm_up and filtro and trend != 1:
         trend = 1
         señal = "BUY"
-        last_signal_bar = current_bar
+        last_signal_bar = len(klines) - 1
 
     elif cruce_down and confirm_down and filtro and trend != -1:
         trend = -1
         señal = "SELL"
-        last_signal_bar = current_bar
+        last_signal_bar = len(klines) - 1
 
     return señal
 
@@ -233,7 +244,7 @@ def calcular_pnl(precio):
 # =========================
 def on_message(ws, message):
     global klines, posicion, precio_entrada, capital
-    global trades, ganadas, perdidas
+    global trades, ganadas, perdidas, trend
 
     try:
         data = json.loads(message)
@@ -249,7 +260,6 @@ def on_message(ws, message):
         "closed": k["x"]
     }
 
-    # 🔥 ACTUALIZACIÓN CORRECTA DE VELAS
     if len(klines) == 0:
         klines.append(candle)
     else:
@@ -260,7 +270,6 @@ def on_message(ws, message):
         else:
             klines[-1] = candle
 
-    # 🔥 SOLO VELA CERRADA (IGUAL TV)
     if candle["closed"]:
         precio = candle["close"]
         pnl = calcular_pnl(precio)
@@ -271,6 +280,7 @@ def on_message(ws, message):
             capital *= (1 + pnl/100)
             posicion = None
             perdidas += 1
+            trend = 0  # 🔥 FIX
 
             guardar_estado()
 
@@ -347,6 +357,7 @@ if __name__ == "__main__":
     print("🚀 BOT BINANCE FUTUROS INICIADO", flush=True)
 
     cargar_estado()
+    cargar_historico()  # 🔥 FIX CLAVE
 
     enviar_telegram("🚀 BOT BINANCE FUTUROS INICIADO")
 
