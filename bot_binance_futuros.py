@@ -116,18 +116,19 @@ def ema(src, length):
             ema_vals.append(v*k + ema_vals[i-1]*(1-k))
     return ema_vals
 
+# ✅ SMA corregido
 def sma(src, length):
     out = []
     for i in range(len(src)):
         if i < length-1:
-            out.append(0)
+            out.append(None)
         else:
             out.append(sum(src[i-length+1:i+1]) / length)
     return out
 
 def cargar_historico():
     global klines
-    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={SYMBOL.upper()}&interval={INTERVAL}&limit=100"
+    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={SYMBOL.upper()}&interval={INTERVAL}&limit=500"
 
     data = requests.get(url).json()
 
@@ -143,13 +144,10 @@ def cargar_historico():
 
     print("📊 Histórico cargado", flush=True)
 
-# =========================
-# 🔥 SEÑAL 1:1 TRADINGVIEW
-# =========================
 def calcular_senal():
     global trend, last_signal_bar
 
-    if len(klines) < 50:
+    if len(klines) < 100:
         return None
 
     close = [k["close"] for k in klines]
@@ -183,7 +181,11 @@ def calcular_senal():
     mavi = TMA1
     kirmizi = TMA2
 
-    i = -2  # vela confirmada
+    i = -1  # ✅ vela cerrada real
+
+    # 🔒 protección micro diferencia
+    if abs(mavi[i] - kirmizi[i]) < 1e-7:
+        return None
 
     cruce_up = mavi[i] > kirmizi[i] and mavi[i-1] <= kirmizi[i-1]
     cruce_down = mavi[i] < kirmizi[i] and mavi[i-1] >= kirmizi[i-1]
@@ -193,6 +195,9 @@ def calcular_senal():
 
     dist = [abs(mavi[j]-kirmizi[j]) for j in range(len(mavi))]
     dist_media = sma(dist, 30)
+
+    if dist_media[i] is None:
+        return None
 
     filtro_vol = dist[i] > dist_media[i] * 0.3
 
@@ -238,17 +243,13 @@ def on_message(ws, message):
         "closed": k["x"]
     }
 
-    if len(klines) == 0:
-        klines.append(candle)
-    else:
-        if candle["closed"]:
-            klines.append(candle)
-            if len(klines) > 100:
-                klines.pop(0)
-        else:
-            klines[-1] = candle
-
+    # ✅ SOLO velas cerradas
     if candle["closed"]:
+        klines.append(candle)
+
+        if len(klines) > 500:
+            klines.pop(0)
+
         precio = candle["close"]
         pnl = calcular_pnl(precio)
         señal = calcular_senal()
