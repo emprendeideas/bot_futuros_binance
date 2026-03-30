@@ -181,7 +181,7 @@ def calcular_senal():
     mavi = TMA1
     kirmizi = TMA2
 
-    i = -2  # ✅ vela cerrada real
+    i = -1  # ✅ vela cerrada real
 
     # 🔒 protección micro diferencia
     if abs(mavi[i] - kirmizi[i]) < 1e-7:
