@@ -8,9 +8,6 @@ import threading
 import socket
 from flask import Flask
 
-# =========================
-# 🔥 ARCHIVO DE MEMORIA
-# =========================
 STATE_FILE = "estado_bot.json"
 
 def guardar_estado():
@@ -49,9 +46,6 @@ def cargar_estado():
         last_signal_bar = -1
         print("⚠️ No hay estado previo, iniciando limpio", flush=True)
 
-# =========================
-# 🌐 WEB (ANTI-SLEEP)
-# =========================
 app = Flask(__name__)
 
 @app.route('/')
@@ -67,9 +61,6 @@ def iniciar_web():
     t.daemon = True
     t.start()
 
-# =========================
-# 🌐 INTERNET
-# =========================
 def internet_disponible():
     try:
         socket.create_connection(("8.8.8.8", 53), timeout=3)
@@ -77,9 +68,6 @@ def internet_disponible():
     except:
         return False
 
-# =========================
-# ⚙️ CONFIG
-# =========================
 SYMBOL = "adausdt"
 INTERVAL = "1m"
 
@@ -92,9 +80,6 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
     raise ValueError("❌ Falta TELEGRAM_TOKEN o TELEGRAM_CHAT_ID")
 
-# =========================
-# 📲 TELEGRAM
-# =========================
 def enviar_telegram(msg):
     while not internet_disponible():
         time.sleep(5)
@@ -108,9 +93,6 @@ def enviar_telegram(msg):
     except:
         pass
 
-# =========================
-# 📊 ESTADO GLOBAL
-# =========================
 capital = CAPITAL_INICIAL
 posicion = None
 precio_entrada = 0
@@ -124,9 +106,6 @@ last_signal_bar = -1
 
 klines = []
 
-# =========================
-# 📈 EMA EXACTA
-# =========================
 def ema(src, length):
     ema_vals = []
     k = 2/(length+1)
@@ -137,9 +116,15 @@ def ema(src, length):
             ema_vals.append(v*k + ema_vals[i-1]*(1-k))
     return ema_vals
 
-# =========================
-# 📊 HISTÓRICO
-# =========================
+def sma(src, length):
+    out = []
+    for i in range(len(src)):
+        if i < length-1:
+            out.append(0)
+        else:
+            out.append(sum(src[i-length+1:i+1]) / length)
+    return out
+
 def cargar_historico():
     global klines
     url = f"https://fapi.binance.com/fapi/v1/klines?symbol={SYMBOL.upper()}&interval={INTERVAL}&limit=100"
@@ -159,10 +144,10 @@ def cargar_historico():
     print("📊 Histórico cargado", flush=True)
 
 # =========================
-# 🧠 INDICADOR
+# 🔥 SEÑAL 1:1 TRADINGVIEW
 # =========================
 def calcular_senal():
-    global last_signal_bar
+    global trend, last_signal_bar
 
     if len(klines) < 50:
         return None
@@ -198,27 +183,36 @@ def calcular_senal():
     mavi = TMA1
     kirmizi = TMA2
 
-    i = -2
+    i = -2  # vela confirmada
 
     cruce_up = mavi[i] > kirmizi[i] and mavi[i-1] <= kirmizi[i-1]
     cruce_down = mavi[i] < kirmizi[i] and mavi[i-1] >= kirmizi[i-1]
 
+    confirm_up = mavi[i] > mavi[i-1]
+    confirm_down = mavi[i] < mavi[i-1]
+
+    dist = [abs(mavi[j]-kirmizi[j]) for j in range(len(mavi))]
+    dist_media = sma(dist, 30)
+
+    filtro_vol = dist[i] > dist_media[i] * 0.3
+
     if last_signal_bar == len(klines) - 1:
         return None
 
-    if cruce_up:
+    señal = None
+
+    if cruce_up and confirm_up and filtro_vol and trend != 1:
+        trend = 1
+        señal = "BUY"
         last_signal_bar = len(klines) - 1
-        return "BUY"
 
-    elif cruce_down:
+    elif cruce_down and confirm_down and filtro_vol and trend != -1:
+        trend = -1
+        señal = "SELL"
         last_signal_bar = len(klines) - 1
-        return "SELL"
 
-    return None
+    return señal
 
-# =========================
-# 💰 PNL
-# =========================
 def calcular_pnl(precio):
     if posicion == "LONG":
         return ((precio - precio_entrada) / precio_entrada) * 100
@@ -226,9 +220,6 @@ def calcular_pnl(precio):
         return ((precio_entrada - precio) / precio_entrada) * 100
     return 0
 
-# =========================
-# 🔌 WS EVENTOS
-# =========================
 def on_message(ws, message):
     global klines, posicion, precio_entrada, capital
     global trades, ganadas, perdidas
@@ -264,7 +255,6 @@ def on_message(ws, message):
 
         print(f"📊 Precio: {precio} | Posición: {posicion} | Señal: {señal}", flush=True)
 
-        # STOP LOSS
         if posicion and pnl <= STOP_LOSS:
             capital *= (1 + pnl/100)
             posicion = None
@@ -273,7 +263,6 @@ def on_message(ws, message):
 
             enviar_telegram(f"🛑 STOP LOSS {pnl:.2f}%\n💰 Capital: {capital:.2f}")
 
-        # 🔥 CAMBIO DE POSICIÓN (FIX)
         if señal:
             nueva_pos = "LONG" if señal == "BUY" else "SHORT"
 
@@ -309,9 +298,6 @@ def on_message(ws, message):
                 f"Precio: {precio}"
             )
 
-# =========================
-# 🔌 EVENTOS WS
-# =========================
 def on_open(ws):
     print("✅ WS conectado", flush=True)
     enviar_telegram("✅ Conexión a Binance Exitosa")
@@ -323,9 +309,6 @@ def on_close(ws, *args):
 def on_error(ws, error):
     print(f"⚠️ Error WS: {error}", flush=True)
 
-# =========================
-# 🔁 LOOP
-# =========================
 def iniciar_ws():
     socket_url = f"wss://fstream.binance.com/ws/{SYMBOL}@kline_{INTERVAL}"
 
@@ -343,9 +326,6 @@ def iniciar_ws():
             print("⚠️ Error conexión, reconectando...", flush=True)
             time.sleep(5)
 
-# =========================
-# 🚀 MAIN
-# =========================
 if __name__ == "__main__":
     print("🚀 BOT BINANCE FUTUROS INICIADO", flush=True)
 
