@@ -138,7 +138,7 @@ def ema(src, length):
     return ema_vals
 
 # =========================
-# 📊 HISTÓRICO (FIX CLAVE)
+# 📊 HISTÓRICO
 # =========================
 def cargar_historico():
     global klines
@@ -159,10 +159,10 @@ def cargar_historico():
     print("📊 Histórico cargado", flush=True)
 
 # =========================
-# 🧠 INDICADOR IGUAL A TV
+# 🧠 INDICADOR
 # =========================
 def calcular_senal():
-    global trend, last_signal_bar
+    global last_signal_bar
 
     if len(klines) < 50:
         return None
@@ -177,7 +177,7 @@ def calcular_senal():
     haOpen = [0.0] * len(ohlc4)
     for i in range(len(ohlc4)):
         if i == 0:
-            haOpen[i] = (ohlc4[i] + 0) / 2
+            haOpen[i] = (ohlc4[i]) / 2
         else:
             haOpen[i] = (ohlc4[i] + haOpen[i-1]) / 2
 
@@ -198,36 +198,23 @@ def calcular_senal():
     mavi = TMA1
     kirmizi = TMA2
 
-    i = -2  # 🔥 vela confirmada estilo TradingView
+    i = -2
 
     cruce_up = mavi[i] > kirmizi[i] and mavi[i-1] <= kirmizi[i-1]
     cruce_down = mavi[i] < kirmizi[i] and mavi[i-1] >= kirmizi[i-1]
 
-    confirm_up = mavi[i] > mavi[i-1]
-    confirm_down = mavi[i] < mavi[i-1]
-
-    dist_series = [abs(mavi[j]-kirmizi[j]) for j in range(len(mavi))]
-    dist_media = sum(dist_series[-30:]) / 30
-    dist = abs(mavi[i] - kirmizi[i])
-    filtro = dist > dist_media * 0.3
-
-    señal = None
-
-    # 🔥 FIX REAL (anti duplicados correcto)
     if last_signal_bar == len(klines) - 1:
         return None
 
-    if cruce_up and confirm_up and filtro and trend != 1:
-        trend = 1
-        señal = "BUY"
+    if cruce_up:
         last_signal_bar = len(klines) - 1
+        return "BUY"
 
-    elif cruce_down and confirm_down and filtro and trend != -1:
-        trend = -1
-        señal = "SELL"
+    elif cruce_down:
         last_signal_bar = len(klines) - 1
+        return "SELL"
 
-    return señal
+    return None
 
 # =========================
 # 💰 PNL
@@ -244,7 +231,7 @@ def calcular_pnl(precio):
 # =========================
 def on_message(ws, message):
     global klines, posicion, precio_entrada, capital
-    global trades, ganadas, perdidas, trend
+    global trades, ganadas, perdidas
 
     try:
         data = json.loads(message)
@@ -275,19 +262,24 @@ def on_message(ws, message):
         pnl = calcular_pnl(precio)
         señal = calcular_senal()
 
+        print(f"📊 Precio: {precio} | Posición: {posicion} | Señal: {señal}", flush=True)
+
         # STOP LOSS
         if posicion and pnl <= STOP_LOSS:
             capital *= (1 + pnl/100)
             posicion = None
             perdidas += 1
-            trend = 0  # 🔥 FIX
-
             guardar_estado()
 
             enviar_telegram(f"🛑 STOP LOSS {pnl:.2f}%\n💰 Capital: {capital:.2f}")
 
-        # NUEVA SEÑAL
+        # 🔥 CAMBIO DE POSICIÓN (FIX)
         if señal:
+            nueva_pos = "LONG" if señal == "BUY" else "SHORT"
+
+            if posicion == nueva_pos:
+                return
+
             if posicion:
                 capital *= (1 + pnl/100)
 
@@ -299,13 +291,14 @@ def on_message(ws, message):
                 trades += 1
 
                 enviar_telegram(
-                    f"💰 Cierre operación\n"
+                    f"🔄 CAMBIO DE POSICIÓN\n"
+                    f"Cierre: {posicion}\n"
                     f"Resultado: {pnl:.2f}%\n"
                     f"Capital: {capital:.2f}\n"
                     f"Trades: {trades}"
                 )
 
-            posicion = "LONG" if señal == "BUY" else "SHORT"
+            posicion = nueva_pos
             precio_entrada = precio
 
             guardar_estado()
@@ -357,7 +350,7 @@ if __name__ == "__main__":
     print("🚀 BOT BINANCE FUTUROS INICIADO", flush=True)
 
     cargar_estado()
-    cargar_historico()  # 🔥 FIX CLAVE
+    cargar_historico()
 
     enviar_telegram("🚀 BOT BINANCE FUTUROS INICIADO")
 
