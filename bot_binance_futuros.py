@@ -142,7 +142,7 @@ def calcular_senal():
     kirmizi = TMA2
 
     # 🔥 EXACTO COMO TV PERO SIN SOBRECONFIRMAR
-    i = -2
+    i = -1
 
     cruce_up = mavi[i] > kirmizi[i] and mavi[i - 1] <= kirmizi[i - 1]
     cruce_down = mavi[i] < kirmizi[i] and mavi[i - 1] >= kirmizi[i - 1]
