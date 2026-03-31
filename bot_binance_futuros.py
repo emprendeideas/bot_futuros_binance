@@ -37,7 +37,8 @@ if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
     raise ValueError("❌ Falta TELEGRAM_TOKEN o TELEGRAM_CHAT_ID")
 
 klines = []
-trend = 0  # igual que TradingView
+trend = 0
+pending_signal = None  # 🔥 clave
 
 # =========================
 # TELEGRAM
@@ -99,7 +100,7 @@ def cargar_historico():
     print("📊 Histórico cargado")
 
 # =========================
-# LÓGICA EXACTA TRADINGVIEW
+# LÓGICA (NO TOCAR)
 # =========================
 def calcular_senal():
     global trend
@@ -112,7 +113,6 @@ def calcular_senal():
     low = [k["low"] for k in klines]
     close = [k["close"] for k in klines]
 
-    # BASE
     ohlc4 = [(o + h + l + c) / 4 for o, h, l, c in zip(open_, high, low, close)]
 
     haOpen = [0.0] * len(ohlc4)
@@ -127,7 +127,6 @@ def calcular_senal():
         for i in range(len(close))
     ]
 
-    # MISMO VALOR QUE TRADINGVIEW
     L = 2
 
     EMA1 = ema(haC, L)
@@ -143,8 +142,8 @@ def calcular_senal():
     mavi = TMA1
     kirmizi = TMA2
 
-    # 🔥 EXACTO IGUAL QUE TRADINGVIEW
-    i = -1
+    i = -2
+    i_confirm = -1
 
     cruce_up = mavi[i] > kirmizi[i] and mavi[i - 1] <= kirmizi[i - 1]
     cruce_down = mavi[i] < kirmizi[i] and mavi[i - 1] >= kirmizi[i - 1]
@@ -152,7 +151,9 @@ def calcular_senal():
     confirm_up = mavi[i] > mavi[i - 1]
     confirm_down = mavi[i] < mavi[i - 1]
 
-    # FILTRO
+    confirmacion_final_up = mavi[i_confirm] >= mavi[i]
+    confirmacion_final_down = mavi[i_confirm] <= mavi[i]
+
     dist = [abs(mavi[j] - kirmizi[j]) for j in range(len(mavi))]
     dist_media = sma(dist, 30)
 
@@ -163,11 +164,11 @@ def calcular_senal():
 
     señal = None
 
-    if cruce_up and confirm_up and filtro_vol and trend != 1:
+    if cruce_up and confirm_up and filtro_vol and confirmacion_final_up and trend != 1:
         trend = 1
         señal = "BUY"
 
-    elif cruce_down and confirm_down and filtro_vol and trend != -1:
+    elif cruce_down and confirm_down and filtro_vol and confirmacion_final_down and trend != -1:
         trend = -1
         señal = "SELL"
 
@@ -177,7 +178,7 @@ def calcular_senal():
 # WEBSOCKET
 # =========================
 def on_message(ws, message):
-    global klines
+    global klines, pending_signal
 
     data = json.loads(message)
     k = data['k']
@@ -192,19 +193,26 @@ def on_message(ws, message):
 
     if candle["closed"]:
 
-        # 🔥 CALCULAR ANTES DE AGREGAR LA NUEVA VELA
-        señal = calcular_senal()
+        # 🔥 1. ENVIAR señal anterior (1 vela después)
+        if pending_signal:
+            enviar_telegram(f"🚀 {pending_signal}\n💰 Precio: {candle['close']}")
+            pending_signal = None
 
-        print(f"📊 Precio: {candle['close']} | Señal: {señal}")
-
-        if señal:
-            enviar_telegram(f"🚀 {señal}\n💰 Precio: {candle['close']}")
-
-        # 🔥 DESPUÉS agregamos la vela
+        # 🔥 2. AGREGAR nueva vela
         klines.append(candle)
 
         if len(klines) > 500:
             klines.pop(0)
+
+        # 🔥 3. CALCULAR nueva señal
+        señal = calcular_senal()
+
+        print(f"📊 Precio: {candle['close']} | Señal: {señal}")
+
+        # 🔥 4. GUARDAR señal (NO enviar aún)
+        if señal:
+            pending_signal = señal
+
 # =========================
 # WS START
 # =========================
@@ -226,7 +234,7 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🔥🔥🔥 CODIGO FINAL ACTIVO 🔥🔥🔥")
+    print("🔥🔥🔥 CODIGO AJUSTADO FINAL 🔥🔥🔥")
     print("🚀 BOT SEÑALES + TELEGRAM INICIADO")
 
     iniciar_web()
