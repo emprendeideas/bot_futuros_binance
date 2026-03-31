@@ -99,7 +99,7 @@ def cargar_historico():
     print("📊 Histórico cargado")
 
 # =========================
-# LÓGICA TRADINGVIEW PRO
+# LÓGICA EXACTA TRADINGVIEW
 # =========================
 def calcular_senal():
     global trend
@@ -112,6 +112,7 @@ def calcular_senal():
     low = [k["low"] for k in klines]
     close = [k["close"] for k in klines]
 
+    # BASE
     ohlc4 = [(o + h + l + c) / 4 for o, h, l, c in zip(open_, high, low, close)]
 
     haOpen = [0.0] * len(ohlc4)
@@ -126,6 +127,7 @@ def calcular_senal():
         for i in range(len(close))
     ]
 
+    # MISMO VALOR QUE TRADINGVIEW
     L = 2
 
     EMA1 = ema(haC, L)
@@ -141,23 +143,16 @@ def calcular_senal():
     mavi = TMA1
     kirmizi = TMA2
 
-    # 🔥 LÓGICA HÍBRIDA
+    # 🔥 EXACTO IGUAL QUE TRADINGVIEW
     i = -2
-    i_confirm = -1
 
-    # CRUCE
     cruce_up = mavi[i] > kirmizi[i] and mavi[i - 1] <= kirmizi[i - 1]
     cruce_down = mavi[i] < kirmizi[i] and mavi[i - 1] >= kirmizi[i - 1]
 
-    # CONFIRMACIÓN
     confirm_up = mavi[i] > mavi[i - 1]
     confirm_down = mavi[i] < mavi[i - 1]
 
-    # CONFIRMACIÓN FINAL (ANTI FALSO)
-    confirmacion_final_up = mavi[i_confirm] >= mavi[i]
-    confirmacion_final_down = mavi[i_confirm] <= mavi[i]
-
-    # FILTRO VOL
+    # FILTRO
     dist = [abs(mavi[j] - kirmizi[j]) for j in range(len(mavi))]
     dist_media = sma(dist, 30)
 
@@ -168,11 +163,11 @@ def calcular_senal():
 
     señal = None
 
-    if cruce_up and confirm_up and filtro_vol and confirmacion_final_up and trend != 1:
+    if cruce_up and confirm_up and filtro_vol and trend != 1:
         trend = 1
         señal = "BUY"
 
-    elif cruce_down and confirm_down and filtro_vol and confirmacion_final_down and trend != -1:
+    elif cruce_down and confirm_down and filtro_vol and trend != -1:
         trend = -1
         señal = "SELL"
 
@@ -229,7 +224,7 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🔥🔥🔥 CODIGO NUEVO REAL 🔥🔥🔥")
+    print("🔥🔥🔥 CODIGO FINAL ACTIVO 🔥🔥🔥")
     print("🚀 BOT SEÑALES + TELEGRAM INICIADO")
 
     iniciar_web()
