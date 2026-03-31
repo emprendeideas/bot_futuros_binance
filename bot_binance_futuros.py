@@ -200,6 +200,8 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__ == "__main__":
+
+    print("🔥🔥🔥 CODIGO NUEVO REAL 🔥🔥🔥")
     print("🚀 BOT SEÑALES + TELEGRAM INICIADO")
 
     enviar_telegram("🚀 BOT DE SEÑALES INICIADO")
