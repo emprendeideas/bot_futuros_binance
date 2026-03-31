@@ -43,7 +43,7 @@ def cargar_estado():
 
         print("✅ Estado restaurado", flush=True)
     else:
-        last_signal_bar = -2
+        last_signal_bar = -1
         print("⚠️ No hay estado previo, iniciando limpio", flush=True)
 
 app = Flask(__name__)
@@ -102,7 +102,7 @@ ganadas = 0
 perdidas = 0
 
 trend = 0
-last_signal_bar = -2
+last_signal_bar = -1
 
 klines = []
 
@@ -166,7 +166,7 @@ def calcular_senal():
 
     haC = [(ohlc4[i] + haOpen[i] + max(high[i],haOpen[i]) + min(low[i],haOpen[i]))/4 for i in range(len(close))]
 
-    L = 6
+    L = 10
 
     EMA1 = ema(haC,L)
     EMA2 = ema(EMA1,L)
@@ -181,7 +181,7 @@ def calcular_senal():
     mavi = TMA1
     kirmizi = TMA2
 
-    i = -2 # ✅ vela cerrada real
+    i = -1 # ✅ vela cerrada real
 
     # 🔒 protección micro diferencia
     if abs(mavi[i] - kirmizi[i]) < 1e-7:
