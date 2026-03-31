@@ -3,7 +3,30 @@ import json
 import requests
 import time
 import os
+import threading
+from flask import Flask
 
+# =========================
+# FLASK (PARA RENDER GRATIS)
+# =========================
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot activo 🚀"
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
+def iniciar_web():
+    t = threading.Thread(target=run_web)
+    t.daemon = True
+    t.start()
+
+# =========================
+# CONFIG
+# =========================
 SYMBOL = "adausdt"
 INTERVAL = "1m"
 
@@ -89,7 +112,6 @@ def calcular_senal():
     low = [k["low"] for k in klines]
     close = [k["close"] for k in klines]
 
-    # BASE
     ohlc4 = [(o + h + l + c) / 4 for o, h, l, c in zip(open_, high, low, close)]
 
     haOpen = [0.0] * len(ohlc4)
@@ -104,7 +126,7 @@ def calcular_senal():
         for i in range(len(close))
     ]
 
-    # MISMO VALOR QUE TRADINGVIEW
+    # ⚠️ IMPORTANTE: USA EL MISMO VALOR QUE TU TRADINGVIEW
     L = 6
 
     EMA1 = ema(haC, L)
@@ -120,8 +142,7 @@ def calcular_senal():
     mavi = TMA1
     kirmizi = TMA2
 
-    # 🔥 CLAVE PARA COINCIDIR CON TV
-    i = -2
+    i = -2  # clave para coincidir con TV
 
     cruce_up = mavi[i] > kirmizi[i] and mavi[i - 1] <= kirmizi[i - 1]
     cruce_down = mavi[i] < kirmizi[i] and mavi[i - 1] >= kirmizi[i - 1]
@@ -200,9 +221,10 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__ == "__main__":
-
-    print("🔥🔥🔥 CODIGO NUEVO REAL 🔥🔥🔥")
+    print("🔥 VERSION NUEVA ACTIVA 🔥")
     print("🚀 BOT SEÑALES + TELEGRAM INICIADO")
+
+    iniciar_web()  # 🔥 SOLUCION RENDER
 
     enviar_telegram("🚀 BOT DE SEÑALES INICIADO")
 
