@@ -221,12 +221,20 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🔥🔥🔥 VERSION FINAL LIMPIA 🔥🔥🔥")
+    print("🔥🔥🔥 CODIGO NUEVO REAL 🔥🔥🔥")
     print("🚀 BOT SEÑALES + TELEGRAM INICIADO")
 
     iniciar_web()
 
     enviar_telegram("🚀 BOT DE SEÑALES INICIADO")
 
-    cargar_historico()
-    iniciar_ws()
+    def run_ws():
+        cargar_historico()
+        iniciar_ws()
+
+    t_ws = threading.Thread(target=run_ws)
+    t_ws.start()
+
+    # Mantener vivo el proceso
+    while True:
+        time.sleep(60)
