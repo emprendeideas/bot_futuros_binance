@@ -13,7 +13,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "OK", 200  # 🔥 respuesta rápida para cron
+    return "OK", 200
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
@@ -38,6 +38,7 @@ if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
 
 klines = []
 trend = 0
+listo_para_operar = False  # 🔥 NUEVO (CLAVE)
 
 # =========================
 # TELEGRAM
@@ -48,7 +49,7 @@ def enviar_telegram(msg):
         requests.post(url, data={
             "chat_id": TELEGRAM_CHAT_ID,
             "text": msg
-        }, timeout=3)  # 🔥 menor bloqueo
+        }, timeout=3)
     except:
         pass
 
@@ -173,7 +174,7 @@ def calcular_senal():
 # WEBSOCKET
 # =========================
 def on_message(ws, message):
-    global klines
+    global klines, listo_para_operar
 
     data = json.loads(message)
     k = data['k']
@@ -191,6 +192,12 @@ def on_message(ws, message):
 
         if len(klines) > 500:
             klines.pop(0)
+
+        # 🔥 IGNORAR PRIMERA VELA (SINCRONIZA)
+        if not listo_para_operar:
+            listo_para_operar = True
+            print("🟢 Bot sincronizado, empezando en tiempo real", flush=True)
+            return
 
         señal = calcular_senal()
 
