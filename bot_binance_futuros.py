@@ -142,7 +142,7 @@ def calcular_senal():
     mavi = TMA1
     kirmizi = TMA2
 
-    i = -2  # clave para coincidir con TV
+    i = -1  # clave para coincidir con TV
 
     cruce_up = mavi[i] > kirmizi[i] and mavi[i - 1] <= kirmizi[i - 1]
     cruce_down = mavi[i] < kirmizi[i] and mavi[i - 1] >= kirmizi[i - 1]
