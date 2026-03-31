@@ -105,7 +105,7 @@ def calcular_senal():
     ]
 
     # MISMO VALOR QUE TRADINGVIEW
-    L = 10
+    L = 6
 
     EMA1 = ema(haC, L)
     EMA2 = ema(EMA1, L)
