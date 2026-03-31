@@ -13,7 +13,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Bot activo 🚀"
+    return "OK", 200  # 🔥 respuesta rápida para cron
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
@@ -37,7 +37,7 @@ if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
     raise ValueError("❌ Falta TELEGRAM_TOKEN o TELEGRAM_CHAT_ID")
 
 klines = []
-trend = 0  # igual que TradingView
+trend = 0
 
 # =========================
 # TELEGRAM
@@ -48,7 +48,7 @@ def enviar_telegram(msg):
         requests.post(url, data={
             "chat_id": TELEGRAM_CHAT_ID,
             "text": msg
-        }, timeout=10)
+        }, timeout=3)  # 🔥 menor bloqueo
     except:
         pass
 
@@ -96,10 +96,10 @@ def cargar_historico():
             "closed": True
         })
 
-    print("📊 Histórico cargado")
+    print("📊 Histórico cargado", flush=True)
 
 # =========================
-# LÓGICA TRADINGVIEW (CORREGIDA)
+# LÓGICA TRADINGVIEW
 # =========================
 def calcular_senal():
     global trend
@@ -141,7 +141,6 @@ def calcular_senal():
     mavi = TMA1
     kirmizi = TMA2
 
-    # 🔥 EXACTO COMO TV PERO SIN SOBRECONFIRMAR
     i = -1
 
     cruce_up = mavi[i] > kirmizi[i] and mavi[i - 1] <= kirmizi[i - 1]
@@ -195,9 +194,8 @@ def on_message(ws, message):
 
         señal = calcular_senal()
 
-        print(f"📊 Precio: {candle['close']} | Señal: {señal}")
-
         if señal:
+            print(f"🚀 {señal} | Precio: {candle['close']}", flush=True)
             enviar_telegram(f"🚀 {señal}\n💰 Precio: {candle['close']}")
 
 # =========================
@@ -214,15 +212,15 @@ def iniciar_ws():
             )
             ws.run_forever()
         except:
-            print("⚠️ Reconectando...")
+            print("⚠️ Reconectando...", flush=True)
             time.sleep(5)
 
 # =========================
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🔥🔥🔥 CODIGO NUEVO REAL 🔥🔥🔥")
-    print("🚀 BOT SEÑALES + TELEGRAM INICIADO")
+    print("🔥🔥🔥 CODIGO NUEVO REAL 🔥🔥🔥", flush=True)
+    print("🚀 BOT SEÑALES + TELEGRAM INICIADO", flush=True)
 
     iniciar_web()
 
@@ -235,6 +233,5 @@ if __name__ == "__main__":
     t_ws = threading.Thread(target=run_ws)
     t_ws.start()
 
-    # Mantener vivo el proceso
     while True:
         time.sleep(60)
