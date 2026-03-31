@@ -191,11 +191,8 @@ def on_message(ws, message):
     }
 
     if candle["closed"]:
-        klines.append(candle)
 
-        if len(klines) > 500:
-            klines.pop(0)
-
+        # 🔥 CALCULAR ANTES DE AGREGAR LA NUEVA VELA
         señal = calcular_senal()
 
         print(f"📊 Precio: {candle['close']} | Señal: {señal}")
@@ -203,6 +200,11 @@ def on_message(ws, message):
         if señal:
             enviar_telegram(f"🚀 {señal}\n💰 Precio: {candle['close']}")
 
+        # 🔥 DESPUÉS agregamos la vela
+        klines.append(candle)
+
+        if len(klines) > 500:
+            klines.pop(0)
 # =========================
 # WS START
 # =========================
