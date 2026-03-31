@@ -33,7 +33,7 @@ INTERVAL = "1m"
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-FEE = 0.0004  # 0.04%
+FEE = 0.0005  # 0.05%
 
 STATE_FILE = "estado_bot.json"
 
