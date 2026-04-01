@@ -28,7 +28,7 @@ def iniciar_web():
 # CONFIG
 # =========================
 SYMBOL = "adausdt"
-INTERVAL = "5m"
+INTERVAL = "1m"
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
