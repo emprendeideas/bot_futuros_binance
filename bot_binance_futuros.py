@@ -33,7 +33,7 @@ INTERVAL = "1m"
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-FEE = 0.0005  # 0.05%
+FEE = 0.0005
 STATE_FILE = "estado_bot.json"
 
 if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
@@ -41,13 +41,14 @@ if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
 
 klines = []
 trend = 0
+bot_listo = False  # 🔥 NUEVO
 
 # =========================
 # ESTADO TRADING
 # =========================
 estado = {
     "capital": 100.0,
-    "posicion": None,  # LONG / SHORT / None
+    "posicion": None,
     "entry_price": 0.0,
     "trades": 0,
     "wins": 0,
@@ -127,6 +128,21 @@ def cargar_historico():
     print("📊 Histórico cargado", flush=True)
 
 # =========================
+# 🔥 SINCRONIZACIÓN INICIAL
+# =========================
+def sincronizar_estado_inicial():
+    global trend
+
+    señal = calcular_senal()
+
+    if señal == "BUY":
+        trend = 1
+    elif señal == "SELL":
+        trend = -1
+
+    print(f"🧠 Estado sincronizado: {trend}", flush=True)
+
+# =========================
 # LÓGICA SEÑALES (NO TOCAR)
 # =========================
 def calcular_senal():
@@ -203,7 +219,6 @@ def calcular_senal():
 def ejecutar_trade(señal, precio):
     global estado
 
-    # CERRAR OPERACIÓN
     if estado["posicion"] is not None:
         entry = estado["entry_price"]
 
@@ -232,14 +247,12 @@ def ejecutar_trade(señal, precio):
             f"📊 PnL: {resultado:.2f} USD"
         )
 
-    # ABRIR NUEVA OPERACIÓN
     if señal == "BUY":
-        estado["posicion"] = "LONG"
+        estado["posicion"] = "BUY"
     elif señal == "SELL":
-        estado["posicion"] = "SHORT"
+        estado["posicion"] = "SELL"
 
     estado["entry_price"] = precio
-
     estado["capital"] *= (1 - FEE)
 
     enviar_telegram(
@@ -254,7 +267,7 @@ def ejecutar_trade(señal, precio):
 # WEBSOCKET
 # =========================
 def on_message(ws, message):
-    global klines
+    global klines, bot_listo
 
     data = json.loads(message)
     k = data['k']
@@ -275,12 +288,26 @@ def on_message(ws, message):
     if len(klines) > 500:
         klines.pop(0)
 
+    if not bot_listo:
+        return
+
     señal = calcular_senal()
 
     if señal:
         precio = candle["close"]
         print(f"🚀 {señal} | {precio}", flush=True)
         ejecutar_trade(señal, precio)
+
+# =========================
+# 🔥 PIN INTERNO (ANTI SLEEP)
+# =========================
+def keep_alive():
+    while True:
+        try:
+            requests.get("http://127.0.0.1:10000", timeout=2)
+        except:
+            pass
+        time.sleep(60)
 
 # =========================
 # WS START
@@ -303,15 +330,21 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT TRADING REAL INICIADO", flush=True)
+    print("🚀 BOT TRADING MEJORADO INICIADO", flush=True)
 
     iniciar_web()
     cargar_estado()
 
-    enviar_telegram("🤖 BOT TRADING ACTIVO")
+    # 🔥 THREAD KEEP ALIVE
+    threading.Thread(target=keep_alive, daemon=True).start()
+
+    enviar_telegram("🤖 BOT TRADING MEJORADO ACTIVO")
 
     def run_ws():
+        global bot_listo
         cargar_historico()
+        sincronizar_estado_inicial()
+        bot_listo = True
         iniciar_ws()
 
     t = threading.Thread(target=run_ws)
