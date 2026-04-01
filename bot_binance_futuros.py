@@ -42,15 +42,13 @@ last_candle_time = None
 iniciado = False
 
 # =========================
-# CONTROL DE OPERACIONES
+# 💰 CAPITAL (NUEVO)
 # =========================
-posicion = None  # "BUY" o "SELL"
-precio_entrada = 0.0
-
 capital = 100.0
-comision = 0.0005
-
-operacion_activa = False
+posicion = None
+precio_entrada = 0.0
+cantidad = 0.0
+comision = 0.0005  # 0.05%
 
 # =========================
 # TELEGRAM
@@ -180,72 +178,40 @@ def calcular_senal():
     return None
 
 # =========================
-# TRADING CONTROL
+# 💰 OPERACIONES (NUEVO)
 # =========================
 def abrir_operacion(tipo, precio):
-    global posicion, precio_entrada, capital, operacion_activa
-
-    if operacion_activa:
-        return
+    global capital, posicion, precio_entrada, cantidad
 
     posicion = tipo
     precio_entrada = precio
-    operacion_activa = True
 
-    fee = capital * comision
-    capital -= fee
+    capital -= capital * comision  # comisión entrada
+    cantidad = capital / precio
 
-    print(f"🟢 ABRE {tipo} @ {precio}", flush=True)
-
-    enviar_telegram(f"🟢 ABRE {tipo}\n💰 {precio}")
-
+    print(f"🟢 ABRIR {tipo} | Capital: {capital:.2f}", flush=True)
 
 def cerrar_operacion(precio):
-    global posicion, precio_entrada, capital, operacion_activa
-
-    if not operacion_activa:
-        return
+    global capital, posicion, precio_entrada, cantidad
 
     if posicion == "BUY":
-        pnl = (precio - precio_entrada) / precio_entrada * capital
-    else:
-        pnl = (precio_entrada - precio) / precio_entrada * capital
+        capital = cantidad * precio
+    elif posicion == "SELL":
+        capital = cantidad * (2 * precio_entrada - precio)
 
-    fee = capital * comision
-    pnl -= fee
+    capital -= capital * comision  # comisión salida
 
-    capital += pnl
+    print(f"🔴 CERRAR {posicion} | Capital: {capital:.2f}", flush=True)
 
-    print(f"🔴 CIERRA {posicion} | PnL: {pnl:.2f}", flush=True)
-
-    enviar_telegram(
-        f"🔴 CIERRE {posicion}\n"
-        f"💰 {precio}\n"
-        f"📊 PnL: {pnl:.2f}\n"
-        f"💼 Capital: {capital:.2f}"
-    )
+    enviar_telegram(f"💰 Capital actual: {round(capital,2)} USD")
 
     posicion = None
-    operacion_activa = False
-
-
-def check_stop(precio):
-    if not operacion_activa:
-        return
-
-    if posicion == "BUY" and precio <= precio_entrada * 0.99:
-        print("⛔ STOP BUY", flush=True)
-        cerrar_operacion(precio)
-
-    elif posicion == "SELL" and precio >= precio_entrada * 1.01:
-        print("⛔ STOP SELL", flush=True)
-        cerrar_operacion(precio)
 
 # =========================
 # WEBSOCKET
 # =========================
 def on_message(ws, message):
-    global klines, last_candle_time, iniciado
+    global klines, last_candle_time, iniciado, posicion
 
     data = json.loads(message)
     k = data['k']
@@ -255,9 +221,6 @@ def on_message(ws, message):
 
     candle_time = k["T"]
 
-    if candle_time <= last_candle_time:
-        return
-
     candle = {
         "open": float(k["o"]),
         "high": float(k["h"]),
@@ -266,27 +229,31 @@ def on_message(ws, message):
         "time": candle_time
     }
 
+    if candle_time <= last_candle_time:
+        return
+
     last_candle_time = candle_time
+
     klines.append(candle)
 
     if len(klines) > 500:
         klines.pop(0)
 
     señal = calcular_senal()
-    precio = candle["close"]
 
     if not iniciado:
         iniciado = True
-        print("🧠 Bot sincronizado", flush=True)
+        print("🧠 Bot sincronizado, esperando señal REAL...", flush=True)
         return
 
-    # 🔥 STOP siempre activo
-    check_stop(precio)
-
     if señal:
+        precio = candle["close"]
         print(f"🚀 {señal} | {precio}", flush=True)
 
-        if operacion_activa:
+        enviar_telegram(f"🚀 {señal}\n💰 Precio: {precio}")
+
+        # 🔥 SOLO CONTROL DE CAPITAL (SIN TOCAR LÓGICA)
+        if posicion:
             cerrar_operacion(precio)
 
         abrir_operacion(señal, precio)
@@ -328,7 +295,7 @@ if __name__ == "__main__":
     iniciar_web()
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT ACTIVO (TIEMPO REAL REAL)")
+    enviar_telegram("🤖 BOT ACTIVO (SIMULACIÓN CAPITAL)")
 
     cargar_historico()
     iniciar_ws()
