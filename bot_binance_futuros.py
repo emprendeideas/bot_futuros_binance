@@ -28,7 +28,7 @@ def iniciar_web():
 # CONFIG
 # =========================
 SYMBOL = "adausdt"
-INTERVAL = "1m"
+INTERVAL = "5m"
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -155,7 +155,7 @@ def calcular_senal():
         for i in range(len(close))
     ]
 
-    L = 2
+    L = 8
 
     EMA1 = ema(haC, L)
     EMA2 = ema(EMA1, L)
