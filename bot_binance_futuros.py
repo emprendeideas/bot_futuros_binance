@@ -7,7 +7,7 @@ import threading
 from flask import Flask
 
 # =========================
-# FLASK (RENDER)
+# FLASK (RENDER ESTABLE)
 # =========================
 app = Flask(__name__)
 
@@ -17,7 +17,7 @@ def home():
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, threaded=True)
 
 def iniciar_web():
     t = threading.Thread(target=run_web)
@@ -37,9 +37,6 @@ FEE = 0.0005  # 0.05%
 
 STATE_FILE = "estado_bot.json"
 
-if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-    raise ValueError("❌ Falta TELEGRAM_TOKEN o TELEGRAM_CHAT_ID")
-
 klines = []
 trend = 0
 
@@ -48,7 +45,7 @@ trend = 0
 # =========================
 estado = {
     "capital": 100.0,
-    "posicion": None,  # LONG / SHORT / None
+    "posicion": None,
     "entry_price": 0.0,
     "trades": 0,
     "wins": 0,
@@ -69,20 +66,23 @@ def cargar_estado():
             estado = json.load(f)
 
 # =========================
-# TELEGRAM
+# TELEGRAM (NO BLOQUEA)
 # =========================
 def enviar_telegram(msg):
-    try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        requests.post(url, data={
-            "chat_id": TELEGRAM_CHAT_ID,
-            "text": msg
-        }, timeout=3)
-    except:
-        pass
+    def send():
+        try:
+            url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+            requests.post(url, data={
+                "chat_id": TELEGRAM_CHAT_ID,
+                "text": msg
+            }, timeout=3)
+        except:
+            pass
+
+    threading.Thread(target=send).start()
 
 # =========================
-# EMA
+# EMA / SMA
 # =========================
 def ema(src, length):
     ema_vals = []
@@ -94,9 +94,6 @@ def ema(src, length):
             ema_vals.append(v * k + ema_vals[i - 1] * (1 - k))
     return ema_vals
 
-# =========================
-# SMA
-# =========================
 def sma(src, length):
     out = []
     for i in range(len(src)):
@@ -128,7 +125,7 @@ def cargar_historico():
     print("📊 Histórico cargado", flush=True)
 
 # =========================
-# LÓGICA SEÑALES (NO TOCAR)
+# SEÑALES (NO TOCAR)
 # =========================
 def calcular_senal():
     global trend
@@ -186,44 +183,36 @@ def calcular_senal():
 
     filtro_vol = dist[i] > dist_media[i] * 0.3
 
-    señal = None
-
     if cruce_up and confirm_up and filtro_vol and trend != 1:
         trend = 1
-        señal = "BUY"
+        return "BUY"
 
     elif cruce_down and confirm_down and filtro_vol and trend != -1:
         trend = -1
-        señal = "SELL"
+        return "SELL"
 
-    return señal
+    return None
 
 # =========================
-# MOTOR DE TRADING
+# TRADING ENGINE
 # =========================
 def ejecutar_trade(señal, precio):
     global estado
 
-    # CERRAR OPERACIÓN
+    # CERRAR
     if estado["posicion"] is not None:
         entry = estado["entry_price"]
 
-        if estado["posicion"] == "LONG":
-            pnl = (precio - entry) / entry
-        else:
-            pnl = (entry - precio) / entry
+        pnl = (precio - entry) / entry if estado["posicion"] == "LONG" else (entry - precio) / entry
 
         capital_antes = estado["capital"]
 
         estado["capital"] *= (1 + pnl)
-
-        # comisión salida
         estado["capital"] *= (1 - FEE)
 
         resultado = estado["capital"] - capital_antes
 
         estado["trades"] += 1
-
         if resultado > 0:
             estado["wins"] += 1
         else:
@@ -231,19 +220,14 @@ def ejecutar_trade(señal, precio):
 
         enviar_telegram(
             f"❌ CIERRE {estado['posicion']}\n"
-            f"💰 Capital: {estado['capital']:.2f} USD\n"
-            f"📊 PnL: {resultado:.2f} USD"
+            f"💰 Capital: {estado['capital']:.2f}\n"
+            f"📊 PnL: {resultado:.2f}"
         )
 
-    # ABRIR NUEVA OPERACIÓN
-    if señal == "BUY":
-        estado["posicion"] = "LONG"
-    elif señal == "SELL":
-        estado["posicion"] = "SHORT"
-
+    # ABRIR
+    estado["posicion"] = "LONG" if señal == "BUY" else "SHORT"
     estado["entry_price"] = precio
 
-    # comisión entrada
     estado["capital"] *= (1 - FEE)
 
     enviar_telegram(
@@ -255,7 +239,7 @@ def ejecutar_trade(señal, precio):
     guardar_estado()
 
 # =========================
-# WEBSOCKET
+# WS
 # =========================
 def on_message(ws, message):
     global klines
@@ -284,7 +268,8 @@ def on_message(ws, message):
     if señal:
         precio = candle["close"]
         print(f"🚀 {señal} | {precio}", flush=True)
-        ejecutar_trade(señal, precio)
+
+        threading.Thread(target=ejecutar_trade, args=(señal, precio)).start()
 
 # =========================
 # WS START
@@ -294,32 +279,41 @@ def iniciar_ws():
 
     while True:
         try:
-            ws = websocket.WebSocketApp(
-                socket_url,
-                on_message=on_message
-            )
+            ws = websocket.WebSocketApp(socket_url, on_message=on_message)
             ws.run_forever()
         except:
             print("⚠️ Reconectando...", flush=True)
             time.sleep(5)
 
 # =========================
+# ANTI-SLEEP INTERNO
+# =========================
+def ping_self():
+    while True:
+        try:
+            requests.get("http://127.0.0.1:10000")
+        except:
+            pass
+        time.sleep(60)
+
+# =========================
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT TRADING REAL INICIADO", flush=True)
+    print("🚀 BOT ULTRA ESTABLE INICIADO", flush=True)
 
     iniciar_web()
     cargar_estado()
 
     enviar_telegram("🤖 BOT TRADING ACTIVO")
 
+    threading.Thread(target=ping_self, daemon=True).start()
+
     def run_ws():
         cargar_historico()
         iniciar_ws()
 
-    t = threading.Thread(target=run_ws)
-    t.start()
+    threading.Thread(target=run_ws).start()
 
     while True:
         time.sleep(60)
