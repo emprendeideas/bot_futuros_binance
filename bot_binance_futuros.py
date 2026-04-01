@@ -42,24 +42,15 @@ last_candle_time = None
 iniciado = False
 
 # =========================
-# TRADING ENGINE
+# CONTROL DE OPERACIONES
 # =========================
-capital = 100
-capital_inicial = 100
-
-posicion = None
+posicion = None  # "BUY" o "SELL"
 precio_entrada = 0.0
-cantidad = 0.0
 
-trades = 0
-ganadas = 0
-perdidas = 0
-pnl_total = 0.0
-
+capital = 100.0
 comision = 0.0005
 
-start_time = time.time()
-ultimo_resumen = time.time()
+operacion_activa = False
 
 # =========================
 # TELEGRAM
@@ -120,7 +111,7 @@ def cargar_historico():
     print("📊 Histórico cargado", flush=True)
 
 # =========================
-# SEÑALES
+# SEÑALES (NO TOCAR)
 # =========================
 def calcular_senal():
     global trend
@@ -189,76 +180,66 @@ def calcular_senal():
     return None
 
 # =========================
-# TRADING FUNCIONES
+# TRADING CONTROL
 # =========================
 def abrir_operacion(tipo, precio):
-    global posicion, precio_entrada, cantidad, capital
+    global posicion, precio_entrada, capital, operacion_activa
+
+    if operacion_activa:
+        return
 
     posicion = tipo
     precio_entrada = precio
-    cantidad = capital / precio
+    operacion_activa = True
 
     fee = capital * comision
     capital -= fee
 
-    print(f"🟢 ABRE {tipo} | {precio} | Fee: {fee}", flush=True)
+    print(f"🟢 ABRE {tipo} @ {precio}", flush=True)
+
+    enviar_telegram(f"🟢 ABRE {tipo}\n💰 {precio}")
 
 
 def cerrar_operacion(precio):
-    global posicion, precio_entrada, capital
-    global trades, ganadas, perdidas, pnl_total
+    global posicion, precio_entrada, capital, operacion_activa
 
-    if posicion is None:
+    if not operacion_activa:
         return
 
     if posicion == "BUY":
-        pnl = (precio - precio_entrada) * cantidad
+        pnl = (precio - precio_entrada) / precio_entrada * capital
     else:
-        pnl = (precio_entrada - precio) * cantidad
+        pnl = (precio_entrada - precio) / precio_entrada * capital
 
     fee = capital * comision
     pnl -= fee
 
     capital += pnl
-    pnl_total += pnl
-    trades += 1
 
-    if pnl > 0:
-        ganadas += 1
-    else:
-        perdidas += 1
+    print(f"🔴 CIERRA {posicion} | PnL: {pnl:.2f}", flush=True)
 
-    print(f"🔴 CIERRA {posicion} | PnL: {pnl:.2f} | Capital: {capital:.2f}", flush=True)
-
-    enviar_telegram(f"🔴 CIERRE {posicion}\n💰 {precio}\n📊 PnL: {pnl:.2f}\n💼 Capital: {capital:.2f}")
+    enviar_telegram(
+        f"🔴 CIERRE {posicion}\n"
+        f"💰 {precio}\n"
+        f"📊 PnL: {pnl:.2f}\n"
+        f"💼 Capital: {capital:.2f}"
+    )
 
     posicion = None
+    operacion_activa = False
 
 
 def check_stop(precio):
+    if not operacion_activa:
+        return
+
     if posicion == "BUY" and precio <= precio_entrada * 0.99:
+        print("⛔ STOP BUY", flush=True)
         cerrar_operacion(precio)
+
     elif posicion == "SELL" and precio >= precio_entrada * 1.01:
+        print("⛔ STOP SELL", flush=True)
         cerrar_operacion(precio)
-
-
-def resumen_diario():
-    global ultimo_resumen
-
-    if time.time() - ultimo_resumen >= 86400:
-        dias = (time.time() - start_time) / 86400
-
-        enviar_telegram(
-            f"📊 RESUMEN\n"
-            f"📅 Días: {dias:.2f}\n"
-            f"💼 Capital: {capital:.2f}\n"
-            f"📈 PnL: {pnl_total:.2f}\n"
-            f"🔢 Trades: {trades}\n"
-            f"✅ Ganadas: {ganadas}\n"
-            f"❌ Perdidas: {perdidas}"
-        )
-
-        ultimo_resumen = time.time()
 
 # =========================
 # WEBSOCKET
@@ -296,18 +277,19 @@ def on_message(ws, message):
 
     if not iniciado:
         iniciado = True
-        print("🧠 Sincronizado", flush=True)
+        print("🧠 Bot sincronizado", flush=True)
         return
 
+    # 🔥 STOP siempre activo
     check_stop(precio)
 
     if señal:
-        if posicion is not None:
+        print(f"🚀 {señal} | {precio}", flush=True)
+
+        if operacion_activa:
             cerrar_operacion(precio)
 
         abrir_operacion(señal, precio)
-
-    resumen_diario()
 
 # =========================
 # KEEP ALIVE
@@ -316,7 +298,6 @@ def keep_alive():
     while True:
         try:
             requests.get("http://127.0.0.1:10000", timeout=2)
-            print("💓 Alive", flush=True)
         except:
             pass
         time.sleep(60)
@@ -329,39 +310,25 @@ def iniciar_ws():
 
     while True:
         try:
-            print("🔄 Iniciando WebSocket...", flush=True)
-
-            ws = websocket.WebSocketApp(socket_url, on_message=on_message)
-
-            wst = threading.Thread(
-                target=ws.run_forever,
-                kwargs={"ping_interval": 20, "ping_timeout": 10}
+            ws = websocket.WebSocketApp(
+                socket_url,
+                on_message=on_message
             )
-            wst.daemon = True
-            wst.start()
-
-            while True:
-                print("💓 Bot vivo...", flush=True)
-                time.sleep(10)
-
-                if not wst.is_alive():
-                    print("⚠️ WS muerto", flush=True)
-                    break
-
-        except Exception as e:
-            print(f"❌ Error WS: {e}", flush=True)
+            ws.run_forever()
+        except:
+            print("⚠️ Reconectando...", flush=True)
             time.sleep(5)
 
 # =========================
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT INICIADO", flush=True)
+    print("🚀 BOT FINAL DEFINITIVO INICIADO", flush=True)
 
     iniciar_web()
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT ACTIVO")
+    enviar_telegram("🤖 BOT ACTIVO (TIEMPO REAL REAL)")
 
     cargar_historico()
     iniciar_ws()
