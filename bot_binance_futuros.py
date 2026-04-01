@@ -248,9 +248,9 @@ def ejecutar_trade(señal, precio):
         )
 
     if señal == "BUY":
-        estado["posicion"] = "BUY"
+        estado["posicion"] = "Señal: BUY"
     elif señal == "SELL":
-        estado["posicion"] = "SELL"
+        estado["posicion"] = "Señal: SELL"
 
     estado["entry_price"] = precio
     estado["capital"] *= (1 - FEE)
@@ -267,7 +267,7 @@ def ejecutar_trade(señal, precio):
 # WEBSOCKET
 # =========================
 def on_message(ws, message):
-    global klines, bot_listo
+    global klines, bot_listo, ignorar_primera_senal
 
     data = json.loads(message)
     k = data['k']
@@ -294,6 +294,12 @@ def on_message(ws, message):
     señal = calcular_senal()
 
     if señal:
+        # 🔥 BLOQUEAR PRIMERA SEÑAL (CLAVE)
+        if ignorar_primera_senal:
+            print("⛔ Señal ignorada (sincronización inicial)", flush=True)
+            ignorar_primera_senal = False
+            return
+
         precio = candle["close"]
         print(f"🚀 {señal} | {precio}", flush=True)
         ejecutar_trade(señal, precio)
