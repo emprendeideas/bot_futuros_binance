@@ -33,13 +33,13 @@ INTERVAL = "1m"
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-FEE = 0.0005
-
 if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
     raise ValueError("❌ Falta TELEGRAM_TOKEN o TELEGRAM_CHAT_ID")
 
 klines = []
 trend = 0
+last_candle_time = None
+iniciado = False  # 🔥 CONTROL REAL
 
 # =========================
 # TELEGRAM
@@ -77,12 +77,12 @@ def sma(src, length):
     return out
 
 # =========================
-# 🔥 CARGAR HISTÓRICO (SOLO CONTEXTO)
+# HISTÓRICO
 # =========================
 def cargar_historico():
-    global klines
+    global klines, last_candle_time
 
-    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={SYMBOL.upper()}&interval={INTERVAL}&limit=150"
+    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={SYMBOL.upper()}&interval={INTERVAL}&limit=500"
     data = requests.get(url).json()
 
     klines = []
@@ -91,57 +91,13 @@ def cargar_historico():
             "open": float(k[1]),
             "high": float(k[2]),
             "low": float(k[3]),
-            "close": float(k[4])
+            "close": float(k[4]),
+            "time": k[6]
         })
 
+    last_candle_time = klines[-1]["time"]
+
     print("📊 Histórico cargado", flush=True)
-
-# =========================
-# 🔥 SINCRONIZAR TREND (SIN SEÑAL)
-# =========================
-def detectar_estado_actual():
-    global trend
-
-    if len(klines) < 100:
-        return
-
-    open_ = [k["open"] for k in klines]
-    high = [k["high"] for k in klines]
-    low = [k["low"] for k in klines]
-    close = [k["close"] for k in klines]
-
-    ohlc4 = [(o + h + l + c) / 4 for o, h, l, c in zip(open_, high, low, close)]
-
-    haOpen = [0.0] * len(ohlc4)
-    for i in range(len(ohlc4)):
-        if i == 0:
-            haOpen[i] = ohlc4[i] / 2
-        else:
-            haOpen[i] = (ohlc4[i] + haOpen[i - 1]) / 2
-
-    haC = [
-        (ohlc4[i] + haOpen[i] + max(high[i], haOpen[i]) + min(low[i], haOpen[i])) / 4
-        for i in range(len(close))
-    ]
-
-    L = 2
-
-    EMA1 = ema(haC, L)
-    EMA2 = ema(EMA1, L)
-    EMA3 = ema(EMA2, L)
-    TMA1 = [3 * EMA1[i] - 3 * EMA2[i] + EMA3[i] for i in range(len(close))]
-
-    EMA4 = ema(TMA1, L)
-    EMA5 = ema(EMA4, L)
-    EMA6 = ema(EMA5, L)
-    TMA2 = [3 * EMA4[i] - 3 * EMA5[i] + EMA6[i] for i in range(len(close))]
-
-    if TMA1[-1] > TMA2[-1]:
-        trend = 1
-    else:
-        trend = -1
-
-    print(f"🧠 Trend inicial sincronizado: {trend}", flush=True)
 
 # =========================
 # SEÑALES (NO TOCAR)
@@ -216,7 +172,7 @@ def calcular_senal():
 # WEBSOCKET
 # =========================
 def on_message(ws, message):
-    global klines
+    global klines, last_candle_time, iniciado
 
     data = json.loads(message)
     k = data['k']
@@ -224,12 +180,21 @@ def on_message(ws, message):
     if not k["x"]:
         return
 
+    candle_time = k["T"]
+
     candle = {
         "open": float(k["o"]),
         "high": float(k["h"]),
         "low": float(k["l"]),
-        "close": float(k["c"])
+        "close": float(k["c"]),
+        "time": candle_time
     }
+
+    # 🔥 IGNORAR HISTÓRICO
+    if candle_time <= last_candle_time:
+        return
+
+    last_candle_time = candle_time
 
     klines.append(candle)
 
@@ -238,13 +203,18 @@ def on_message(ws, message):
 
     señal = calcular_senal()
 
+    # 🔥 PRIMERA VELA → SOLO ACTIVAR
+    if not iniciado:
+        iniciado = True
+        print("🧠 Bot sincronizado, esperando señal REAL...", flush=True)
+        return
+
     if señal:
         precio = candle["close"]
         print(f"🚀 {señal} | {precio}", flush=True)
 
         enviar_telegram(
-            f"🚀 {señal}\n"
-            f"💰 Precio: {precio}"
+            f"🚀 {señal}\n💰 Precio: {precio}"
         )
 
 # =========================
@@ -279,15 +249,12 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT SINCRONIZADO PERFECTO INICIADO", flush=True)
+    print("🚀 BOT FINAL DEFINITIVO INICIADO", flush=True)
 
     iniciar_web()
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT ACTIVO (SINCRONIZADO)")
+    enviar_telegram("🤖 BOT ACTIVO (TIEMPO REAL REAL)")
 
-    # 🔥 CLAVE
     cargar_historico()
-    detectar_estado_actual()
-
     iniciar_ws()
