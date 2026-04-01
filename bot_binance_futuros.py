@@ -77,7 +77,74 @@ def sma(src, length):
     return out
 
 # =========================
-# SEÑALES
+# 🔥 CARGAR HISTÓRICO (SOLO CONTEXTO)
+# =========================
+def cargar_historico():
+    global klines
+
+    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={SYMBOL.upper()}&interval={INTERVAL}&limit=150"
+    data = requests.get(url).json()
+
+    klines = []
+    for k in data:
+        klines.append({
+            "open": float(k[1]),
+            "high": float(k[2]),
+            "low": float(k[3]),
+            "close": float(k[4])
+        })
+
+    print("📊 Histórico cargado", flush=True)
+
+# =========================
+# 🔥 SINCRONIZAR TREND (SIN SEÑAL)
+# =========================
+def detectar_estado_actual():
+    global trend
+
+    if len(klines) < 100:
+        return
+
+    open_ = [k["open"] for k in klines]
+    high = [k["high"] for k in klines]
+    low = [k["low"] for k in klines]
+    close = [k["close"] for k in klines]
+
+    ohlc4 = [(o + h + l + c) / 4 for o, h, l, c in zip(open_, high, low, close)]
+
+    haOpen = [0.0] * len(ohlc4)
+    for i in range(len(ohlc4)):
+        if i == 0:
+            haOpen[i] = ohlc4[i] / 2
+        else:
+            haOpen[i] = (ohlc4[i] + haOpen[i - 1]) / 2
+
+    haC = [
+        (ohlc4[i] + haOpen[i] + max(high[i], haOpen[i]) + min(low[i], haOpen[i])) / 4
+        for i in range(len(close))
+    ]
+
+    L = 2
+
+    EMA1 = ema(haC, L)
+    EMA2 = ema(EMA1, L)
+    EMA3 = ema(EMA2, L)
+    TMA1 = [3 * EMA1[i] - 3 * EMA2[i] + EMA3[i] for i in range(len(close))]
+
+    EMA4 = ema(TMA1, L)
+    EMA5 = ema(EMA4, L)
+    EMA6 = ema(EMA5, L)
+    TMA2 = [3 * EMA4[i] - 3 * EMA5[i] + EMA6[i] for i in range(len(close))]
+
+    if TMA1[-1] > TMA2[-1]:
+        trend = 1
+    else:
+        trend = -1
+
+    print(f"🧠 Trend inicial sincronizado: {trend}", flush=True)
+
+# =========================
+# SEÑALES (NO TOCAR)
 # =========================
 def calcular_senal():
     global trend
@@ -212,11 +279,15 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT TIEMPO REAL PURO INICIADO", flush=True)
+    print("🚀 BOT SINCRONIZADO PERFECTO INICIADO", flush=True)
 
     iniciar_web()
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT ACTIVO (SIN HISTÓRICO)")
+    enviar_telegram("🤖 BOT ACTIVO (SINCRONIZADO)")
+
+    # 🔥 CLAVE
+    cargar_historico()
+    detectar_estado_actual()
 
     iniciar_ws()
