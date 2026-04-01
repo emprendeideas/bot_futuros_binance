@@ -41,7 +41,8 @@ if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
 
 klines = []
 trend = 0
-bot_listo = False  # 🔥 NUEVO
+bot_listo = False
+last_candle_time = None  # 🔥 CONTROL PROFESIONAL
 
 # =========================
 # ESTADO TRADING
@@ -110,7 +111,7 @@ def sma(src, length):
 # HISTÓRICO
 # =========================
 def cargar_historico():
-    global klines
+    global klines, last_candle_time
 
     url = f"https://fapi.binance.com/fapi/v1/klines?symbol={SYMBOL.upper()}&interval={INTERVAL}&limit=500"
     data = requests.get(url).json()
@@ -122,13 +123,16 @@ def cargar_historico():
             "high": float(k[2]),
             "low": float(k[3]),
             "close": float(k[4]),
-            "closed": True
+            "closed": True,
+            "time": k[6]  # 🔥 tiempo de cierre
         })
+
+    last_candle_time = klines[-1]["time"]
 
     print("📊 Histórico cargado", flush=True)
 
 # =========================
-# 🔥 SINCRONIZACIÓN INICIAL
+# SINCRONIZACIÓN INICIAL
 # =========================
 def sincronizar_estado_inicial():
     global trend
@@ -267,7 +271,7 @@ def ejecutar_trade(señal, precio):
 # WEBSOCKET
 # =========================
 def on_message(ws, message):
-    global klines, bot_listo, ignorar_primera_senal
+    global klines, bot_listo, last_candle_time
 
     data = json.loads(message)
     k = data['k']
@@ -275,12 +279,15 @@ def on_message(ws, message):
     if not k["x"]:
         return
 
+    candle_time = k["T"]
+
     candle = {
         "open": float(k["o"]),
         "high": float(k["h"]),
         "low": float(k["l"]),
         "close": float(k["c"]),
-        "closed": True
+        "closed": True,
+        "time": candle_time
     }
 
     klines.append(candle)
@@ -288,24 +295,25 @@ def on_message(ws, message):
     if len(klines) > 500:
         klines.pop(0)
 
+    # 🔥 BLOQUEAR HISTÓRICO
+    if candle_time <= last_candle_time:
+        print("⛔ Vela histórica ignorada", flush=True)
+        return
+
+    last_candle_time = candle_time
+
     if not bot_listo:
         return
 
     señal = calcular_senal()
 
     if señal:
-        # 🔥 BLOQUEAR PRIMERA SEÑAL (CLAVE)
-        if ignorar_primera_senal:
-            print("⛔ Señal ignorada (sincronización inicial)", flush=True)
-            ignorar_primera_senal = False
-            return
-
         precio = candle["close"]
         print(f"🚀 {señal} | {precio}", flush=True)
         ejecutar_trade(señal, precio)
 
 # =========================
-# 🔥 PIN INTERNO (ANTI SLEEP)
+# KEEP ALIVE
 # =========================
 def keep_alive():
     while True:
@@ -336,15 +344,14 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT TRADING MEJORADO INICIADO", flush=True)
+    print("🚀 BOT TRADING FINAL INICIADO", flush=True)
 
     iniciar_web()
     cargar_estado()
 
-    # 🔥 THREAD KEEP ALIVE
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT TRADING MEJORADO ACTIVO")
+    enviar_telegram("🤖 BOT TRADING FINAL ACTIVO")
 
     def run_ws():
         global bot_listo
