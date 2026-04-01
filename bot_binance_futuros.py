@@ -236,13 +236,32 @@ def iniciar_ws():
 
     while True:
         try:
+            print("🔄 Iniciando WebSocket...", flush=True)
+
             ws = websocket.WebSocketApp(
                 socket_url,
                 on_message=on_message
             )
-            ws.run_forever()
-        except:
-            print("⚠️ Reconectando...", flush=True)
+
+            # 🔥 ejecutar WS en hilo separado
+            wst = threading.Thread(
+                target=ws.run_forever,
+                kwargs={"ping_interval": 20, "ping_timeout": 10}
+            )
+            wst.daemon = True
+            wst.start()
+
+            # 🔥 LOOP PRINCIPAL
+            while True:
+                print("💓 Bot vivo...", flush=True)
+                time.sleep(10)
+
+                if not wst.is_alive():
+                    print("⚠️ WS muerto, reiniciando...", flush=True)
+                    break
+
+        except Exception as e:
+            print(f"❌ Error WS: {e}", flush=True)
             time.sleep(5)
 
 # =========================
