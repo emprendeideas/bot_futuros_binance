@@ -34,40 +34,12 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 FEE = 0.0005
-STATE_FILE = "estado_bot.json"
 
 if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
     raise ValueError("❌ Falta TELEGRAM_TOKEN o TELEGRAM_CHAT_ID")
 
 klines = []
 trend = 0
-bot_listo = False
-last_candle_time = None  # 🔥 CONTROL PROFESIONAL
-
-# =========================
-# ESTADO TRADING
-# =========================
-estado = {
-    "capital": 100.0,
-    "posicion": None,
-    "entry_price": 0.0,
-    "trades": 0,
-    "wins": 0,
-    "losses": 0
-}
-
-# =========================
-# PERSISTENCIA
-# =========================
-def guardar_estado():
-    with open(STATE_FILE, "w") as f:
-        json.dump(estado, f)
-
-def cargar_estado():
-    global estado
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, "r") as f:
-            estado = json.load(f)
 
 # =========================
 # TELEGRAM
@@ -83,7 +55,7 @@ def enviar_telegram(msg):
         pass
 
 # =========================
-# EMA
+# EMA / SMA
 # =========================
 def ema(src, length):
     ema_vals = []
@@ -95,9 +67,6 @@ def ema(src, length):
             ema_vals.append(v * k + ema_vals[i - 1] * (1 - k))
     return ema_vals
 
-# =========================
-# SMA
-# =========================
 def sma(src, length):
     out = []
     for i in range(len(src)):
@@ -108,46 +77,7 @@ def sma(src, length):
     return out
 
 # =========================
-# HISTÓRICO
-# =========================
-def cargar_historico():
-    global klines, last_candle_time
-
-    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={SYMBOL.upper()}&interval={INTERVAL}&limit=500"
-    data = requests.get(url).json()
-
-    klines = []
-    for k in data:
-        klines.append({
-            "open": float(k[1]),
-            "high": float(k[2]),
-            "low": float(k[3]),
-            "close": float(k[4]),
-            "closed": True,
-            "time": k[6]  # 🔥 tiempo de cierre
-        })
-
-    last_candle_time = klines[-1]["time"]
-
-    print("📊 Histórico cargado", flush=True)
-
-# =========================
-# SINCRONIZACIÓN INICIAL
-# =========================
-def sincronizar_estado_inicial():
-    global trend
-
-    señal = calcular_senal()
-
-    if señal == "BUY":
-        trend = 1
-    elif señal == "SELL":
-        trend = -1
-
-    print(f"🧠 Estado sincronizado: {trend}", flush=True)
-
-# =========================
-# LÓGICA SEÑALES (NO TOCAR)
+# SEÑALES
 # =========================
 def calcular_senal():
     global trend
@@ -205,73 +135,21 @@ def calcular_senal():
 
     filtro_vol = dist[i] > dist_media[i] * 0.3
 
-    señal = None
-
     if cruce_up and confirm_up and filtro_vol and trend != 1:
         trend = 1
-        señal = "BUY"
+        return "BUY"
 
     elif cruce_down and confirm_down and filtro_vol and trend != -1:
         trend = -1
-        señal = "SELL"
+        return "SELL"
 
-    return señal
-
-# =========================
-# MOTOR DE TRADING
-# =========================
-def ejecutar_trade(señal, precio):
-    global estado
-
-    if estado["posicion"] is not None:
-        entry = estado["entry_price"]
-
-        if estado["posicion"] == "LONG":
-            pnl = (precio - entry) / entry
-        else:
-            pnl = (entry - precio) / entry
-
-        capital_antes = estado["capital"]
-
-        estado["capital"] *= (1 + pnl)
-        estado["capital"] *= (1 - FEE)
-
-        resultado = estado["capital"] - capital_antes
-
-        estado["trades"] += 1
-
-        if resultado > 0:
-            estado["wins"] += 1
-        else:
-            estado["losses"] += 1
-
-        enviar_telegram(
-            f"❌ CIERRE {estado['posicion']}\n"
-            f"💰 Capital: {estado['capital']:.2f} USD\n"
-            f"📊 PnL: {resultado:.2f} USD"
-        )
-
-    if señal == "BUY":
-        estado["posicion"] = "Señal: BUY"
-    elif señal == "SELL":
-        estado["posicion"] = "Señal: SELL"
-
-    estado["entry_price"] = precio
-    estado["capital"] *= (1 - FEE)
-
-    enviar_telegram(
-        f"🚀 {estado['posicion']}\n"
-        f"💰 Precio: {precio}\n"
-        f"💼 Capital: {estado['capital']:.2f}"
-    )
-
-    guardar_estado()
+    return None
 
 # =========================
 # WEBSOCKET
 # =========================
 def on_message(ws, message):
-    global klines, bot_listo, last_candle_time
+    global klines
 
     data = json.loads(message)
     k = data['k']
@@ -279,15 +157,11 @@ def on_message(ws, message):
     if not k["x"]:
         return
 
-    candle_time = k["T"]
-
     candle = {
         "open": float(k["o"]),
         "high": float(k["h"]),
         "low": float(k["l"]),
-        "close": float(k["c"]),
-        "closed": True,
-        "time": candle_time
+        "close": float(k["c"])
     }
 
     klines.append(candle)
@@ -295,22 +169,16 @@ def on_message(ws, message):
     if len(klines) > 500:
         klines.pop(0)
 
-    # 🔥 BLOQUEAR HISTÓRICO
-    if candle_time <= last_candle_time:
-        print("⛔ Vela histórica ignorada", flush=True)
-        return
-
-    last_candle_time = candle_time
-
-    if not bot_listo:
-        return
-
     señal = calcular_senal()
 
     if señal:
         precio = candle["close"]
         print(f"🚀 {señal} | {precio}", flush=True)
-        ejecutar_trade(señal, precio)
+
+        enviar_telegram(
+            f"🚀 {señal}\n"
+            f"💰 Precio: {precio}"
+        )
 
 # =========================
 # KEEP ALIVE
@@ -344,24 +212,11 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT TRADING FINAL INICIADO", flush=True)
+    print("🚀 BOT TIEMPO REAL PURO INICIADO", flush=True)
 
     iniciar_web()
-    cargar_estado()
-
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT TRADING FINAL ACTIVO")
+    enviar_telegram("🤖 BOT ACTIVO (SIN HISTÓRICO)")
 
-    def run_ws():
-        global bot_listo
-        cargar_historico()
-        sincronizar_estado_inicial()
-        bot_listo = True
-        iniciar_ws()
-
-    t = threading.Thread(target=run_ws)
-    t.start()
-
-    while True:
-        time.sleep(60)
+    iniciar_ws()
