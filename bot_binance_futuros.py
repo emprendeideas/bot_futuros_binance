@@ -16,7 +16,10 @@ def home():
     return "OK", 200
 
 def iniciar_web():
-    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
+    threading.Thread(
+        target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))),
+        daemon=True
+    ).start()
 
 # =========================
 # CONFIG
@@ -195,12 +198,13 @@ def on_message(ws, message):
 
     señal=calcular_senal()
 
-    # 🔥 FASE DE SINCRONIZACIÓN REAL
+    # 🔥 SINCRONIZA PERO NO PIERDE LA PRIMERA SEÑAL
     if not sincronizado:
         if señal:
             sincronizado = True
-            print("✅ Sincronizado con mercado", flush=True)
-        return
+            print("✅ Sincronizado + Primera señal válida", flush=True)
+        else:
+            return
 
     if señal:
         precio=candle["close"]
@@ -236,12 +240,12 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__=="__main__":
-    print("🚀 BOT DEFINITIVO INICIADO", flush=True)
+    print("🚀 BOT DEFINITIVO PRO INICIADO", flush=True)
 
     iniciar_web()
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT ACTIVO (SIN SEÑALES FALSAS)")
+    enviar_telegram("🤖 BOT ACTIVO (100% SINCRONIZADO)")
 
     cargar_historico()
     sincronizar_trend()
