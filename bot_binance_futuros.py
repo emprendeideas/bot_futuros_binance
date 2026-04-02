@@ -257,7 +257,7 @@ if __name__ == "__main__":
     iniciar_web()
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT ACTIVO")
+    enviar_telegram("🤖 BOT ULTRA ACTIVO")
 
     cargar_historico()
     sincronizar_trend()
