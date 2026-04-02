@@ -16,7 +16,13 @@ def home():
     return "OK", 200
 
 def iniciar_web():
-    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
+    threading.Thread(
+        target=lambda: app.run(
+            host="0.0.0.0",
+            port=int(os.environ.get("PORT", 10000))
+        ),
+        daemon=True
+    ).start()
 
 # =========================
 # CONFIG
@@ -34,9 +40,8 @@ klines = []
 trend = 0
 last_candle_time = None
 
-# 🔥 CONTROL
-sincronizado = False
-vela_real_detectada = False
+# 🔥 CONTROL REAL
+velas_reales = 0
 
 # =========================
 # TELEGRAM
@@ -62,7 +67,11 @@ def ema(src, length):
     return ema_vals
 
 def sma(src, length):
-    return [None if i < length - 1 else sum(src[i - length + 1:i + 1]) / length for i in range(len(src))]
+    return [
+        None if i < length - 1
+        else sum(src[i - length + 1:i + 1]) / length
+        for i in range(len(src))
+    ]
 
 # =========================
 # HISTÓRICO
@@ -91,6 +100,7 @@ def cargar_historico():
 # =========================
 def sincronizar_trend():
     global trend
+
     señal = calcular_senal()
 
     if señal == "BUY":
@@ -120,7 +130,10 @@ def calcular_senal():
     for i in range(1,len(ohlc4)):
         haOpen.append((ohlc4[i]+haOpen[i-1])/2)
 
-    haC = [(ohlc4[i]+haOpen[i]+max(high[i],haOpen[i])+min(low[i],haOpen[i]))/4 for i in range(len(close))]
+    haC = [
+        (ohlc4[i]+haOpen[i]+max(high[i],haOpen[i])+min(low[i],haOpen[i]))/4
+        for i in range(len(close))
+    ]
 
     L=2
 
@@ -167,46 +180,46 @@ def calcular_senal():
 # WEBSOCKET
 # =========================
 def on_message(ws, message):
-    global klines, last_candle_time, sincronizado, vela_real_detectada
+    global klines, last_candle_time, velas_reales
 
-    data=json.loads(message)
-    k=data['k']
+    data = json.loads(message)
+    k = data['k']
 
     if not k["x"]:
         return
 
-    candle_time=k["T"]
+    candle_time = k["T"]
 
-    # 🔥 IGNORAR HISTÓRICO
+    # 🔥 BLOQUEAR HISTÓRICO
     if candle_time <= last_candle_time:
         return
 
-    last_candle_time=candle_time
+    last_candle_time = candle_time
+    velas_reales += 1
 
-    candle={
-        "open":float(k["o"]),
-        "high":float(k["h"]),
-        "low":float(k["l"]),
-        "close":float(k["c"]),
-        "time":candle_time
+    candle = {
+        "open": float(k["o"]),
+        "high": float(k["h"]),
+        "low": float(k["l"]),
+        "close": float(k["c"]),
+        "time": candle_time
     }
 
     klines.append(candle)
-    if len(klines)>500:
+    if len(klines) > 500:
         klines.pop(0)
 
-    # 🔥 DETECTAR PRIMERA VELA REAL
-    if not vela_real_detectada:
-        vela_real_detectada = True
-        print("🟢 Primera vela real detectada", flush=True)
+    señal = calcular_senal()
 
-    señal=calcular_senal()
+    # 🔥 DESDE LA PRIMERA VELA YA OPERA
+    if velas_reales >= 1 and señal:
+        precio = candle["close"]
 
-    if señal:
-        precio=candle["close"]
         print(f"🚀 {señal} | {precio}", flush=True)
 
-        enviar_telegram(f"🚀 {señal}\n💰 Precio: {precio}")
+        enviar_telegram(
+            f"🚀 {señal}\n💰 Precio: {precio}"
+        )
 
 # =========================
 # KEEP ALIVE
@@ -223,11 +236,14 @@ def keep_alive():
 # WS START
 # =========================
 def iniciar_ws():
-    url=f"wss://fstream.binance.com/ws/{SYMBOL}@kline_{INTERVAL}"
+    url = f"wss://fstream.binance.com/ws/{SYMBOL}@kline_{INTERVAL}"
 
     while True:
         try:
-            websocket.WebSocketApp(url,on_message=on_message).run_forever()
+            websocket.WebSocketApp(
+                url,
+                on_message=on_message
+            ).run_forever()
         except:
             print("⚠️ Reconectando...", flush=True)
             time.sleep(5)
@@ -235,13 +251,13 @@ def iniciar_ws():
 # =========================
 # MAIN
 # =========================
-if __name__=="__main__":
-    print("🚀 BOT DEFINITIVO INICIADO", flush=True)
+if __name__ == "__main__":
+    print("🚀 BOT FINAL ULTRA INICIADO", flush=True)
 
     iniciar_web()
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT FINAL ACTIVO")
+    enviar_telegram("🤖 BOT ACTIVO (ULTRA REALTIME)")
 
     cargar_historico()
     sincronizar_trend()
