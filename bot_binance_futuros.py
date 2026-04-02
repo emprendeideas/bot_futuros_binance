@@ -135,7 +135,7 @@ def calcular_senal():
         for i in range(len(close))
     ]
 
-    L=8
+    L=2
 
     EMA1=ema(haC,L)
     EMA2=ema(EMA1,L)
@@ -257,7 +257,7 @@ if __name__ == "__main__":
     iniciar_web()
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT ULTRA ACTIVO")
+    enviar_telegram("🤖 BOT ULTRA ACTIVADO")
 
     cargar_historico()
     sincronizar_trend()
