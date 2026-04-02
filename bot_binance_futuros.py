@@ -135,7 +135,7 @@ def calcular_senal():
         for i in range(len(close))
     ]
 
-    L=2
+    L=8
 
     EMA1=ema(haC,L)
     EMA2=ema(EMA1,L)
