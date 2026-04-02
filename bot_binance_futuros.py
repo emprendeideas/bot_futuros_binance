@@ -228,7 +228,7 @@ if __name__=="__main__":
     iniciar_web()
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT ACTIVO (ULTRA LIMPIO)")
+    enviar_telegram("🤖 BOT ACTIVO ULTRA LIMPIO")
 
     cargar_historico()
     iniciar_ws()
