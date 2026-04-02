@@ -39,7 +39,7 @@ if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
 klines = []
 trend = 0
 last_candle_time = None
-iniciado = False  # 🔥 CONTROL REAL
+iniciado = False
 
 # =========================
 # TELEGRAM
@@ -98,6 +98,21 @@ def cargar_historico():
     last_candle_time = klines[-1]["time"]
 
     print("📊 Histórico cargado", flush=True)
+
+# =========================
+# 🔥 SINCRONIZAR TREND (CLAVE)
+# =========================
+def sincronizar_trend():
+    global trend
+
+    señal = calcular_senal()
+
+    if señal == "BUY":
+        trend = 1
+    elif señal == "SELL":
+        trend = -1
+
+    print(f"🧠 Trend sincronizado: {trend}", flush=True)
 
 # =========================
 # SEÑALES (NO TOCAR)
@@ -182,6 +197,12 @@ def on_message(ws, message):
 
     candle_time = k["T"]
 
+    # 🔥 IGNORAR HISTÓRICO
+    if candle_time <= last_candle_time:
+        return
+
+    last_candle_time = candle_time
+
     candle = {
         "open": float(k["o"]),
         "high": float(k["h"]),
@@ -190,24 +211,18 @@ def on_message(ws, message):
         "time": candle_time
     }
 
-    # 🔥 IGNORAR HISTÓRICO
-    if candle_time <= last_candle_time:
-        return
-
-    last_candle_time = candle_time
-
     klines.append(candle)
 
     if len(klines) > 500:
         klines.pop(0)
 
-    señal = calcular_senal()
-
-    # 🔥 PRIMERA VELA → SOLO ACTIVAR
+    # 🔥 PRIMERA VELA SOLO SINCRONIZA
     if not iniciado:
         iniciado = True
-        print("🧠 Bot sincronizado, esperando señal REAL...", flush=True)
+        print("🧠 Bot listo, ahora sí opera", flush=True)
         return
+
+    señal = calcular_senal()
 
     if señal:
         precio = candle["close"]
@@ -249,12 +264,14 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT FINAL DEFINITIVO INICIADO", flush=True)
+    print("🚀 BOT FINAL PRO INICIADO", flush=True)
 
     iniciar_web()
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT ACTIVO (TIEMPO REAL REAL)")
+    enviar_telegram("🤖 BOT ACTIVO (PRO REALTIME)")
 
     cargar_historico()
+    sincronizar_trend()  # 🔥 CLAVE
+
     iniciar_ws()
