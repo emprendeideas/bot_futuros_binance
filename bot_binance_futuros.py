@@ -36,8 +36,6 @@ if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
 klines = []
 trend = 0
 last_candle_time = None
-
-# 🔥 CONTROL REAL
 sincronizado = False
 
 # =========================
@@ -87,20 +85,6 @@ def cargar_historico():
     last_candle_time = klines[-1]["time"]
 
     print("📊 Histórico cargado", flush=True)
-
-# =========================
-# SINCRONIZAR TREND
-# =========================
-def sincronizar_trend():
-    global trend
-    señal = calcular_senal()
-
-    if señal == "BUY":
-        trend = 1
-    elif señal == "SELL":
-        trend = -1
-
-    print(f"🧠 Trend inicial: {trend}", flush=True)
 
 # =========================
 # SEÑALES (NO TOCAR)
@@ -198,11 +182,10 @@ def on_message(ws, message):
 
     señal=calcular_senal()
 
-    # 🔥 SINCRONIZA PERO NO PIERDE LA PRIMERA SEÑAL
     if not sincronizado:
         if señal:
             sincronizado = True
-            print("✅ Sincronizado + Primera señal válida", flush=True)
+            print("✅ Primera señal REAL detectada", flush=True)
         else:
             return
 
@@ -240,14 +223,12 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__=="__main__":
-    print("🚀 BOT DEFINITIVO PRO INICIADO", flush=True)
+    print("🚀 BOT DEFINITIVO PRO LIMPIO", flush=True)
 
     iniciar_web()
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT ACTIVO (100% SINCRONIZADO)")
+    enviar_telegram("🤖 BOT ACTIVO (ULTRA LIMPIO)")
 
     cargar_historico()
-    sincronizar_trend()
-
     iniciar_ws()
