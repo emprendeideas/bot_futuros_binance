@@ -16,10 +16,7 @@ def home():
     return "OK", 200
 
 def iniciar_web():
-    threading.Thread(
-        target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))),
-        daemon=True
-    ).start()
+    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
 
 # =========================
 # CONFIG
@@ -36,7 +33,10 @@ if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
 klines = []
 trend = 0
 last_candle_time = None
+
+# 🔥 CONTROL
 sincronizado = False
+vela_real_detectada = False
 
 # =========================
 # TELEGRAM
@@ -85,6 +85,20 @@ def cargar_historico():
     last_candle_time = klines[-1]["time"]
 
     print("📊 Histórico cargado", flush=True)
+
+# =========================
+# SINCRONIZAR TREND
+# =========================
+def sincronizar_trend():
+    global trend
+    señal = calcular_senal()
+
+    if señal == "BUY":
+        trend = 1
+    elif señal == "SELL":
+        trend = -1
+
+    print(f"🧠 Trend inicial: {trend}", flush=True)
 
 # =========================
 # SEÑALES (NO TOCAR)
@@ -153,7 +167,7 @@ def calcular_senal():
 # WEBSOCKET
 # =========================
 def on_message(ws, message):
-    global klines, last_candle_time, sincronizado
+    global klines, last_candle_time, sincronizado, vela_real_detectada
 
     data=json.loads(message)
     k=data['k']
@@ -163,6 +177,7 @@ def on_message(ws, message):
 
     candle_time=k["T"]
 
+    # 🔥 IGNORAR HISTÓRICO
     if candle_time <= last_candle_time:
         return
 
@@ -180,14 +195,12 @@ def on_message(ws, message):
     if len(klines)>500:
         klines.pop(0)
 
-    señal=calcular_senal()
+    # 🔥 DETECTAR PRIMERA VELA REAL
+    if not vela_real_detectada:
+        vela_real_detectada = True
+        print("🟢 Primera vela real detectada", flush=True)
 
-    if not sincronizado:
-        if señal:
-            sincronizado = True
-            print("✅ Primera señal REAL detectada", flush=True)
-        else:
-            return
+    señal=calcular_senal()
 
     if señal:
         precio=candle["close"]
@@ -223,12 +236,14 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__=="__main__":
-    print("🚀 BOT DEFINITIVO LIMPIO", flush=True)
+    print("🚀 BOT DEFINITIVO PRO INICIADO", flush=True)
 
     iniciar_web()
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT ACTIVO ULTRA LIMPIO")
+    enviar_telegram("🤖 BOT ACTIVO FINAL (PRECISO)")
 
     cargar_historico()
+    sincronizar_trend()
+
     iniciar_ws()
