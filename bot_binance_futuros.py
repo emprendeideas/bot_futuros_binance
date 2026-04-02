@@ -7,7 +7,7 @@ import threading
 from flask import Flask
 
 # =========================
-# FLASK (RENDER)
+# FLASK
 # =========================
 app = Flask(__name__)
 
@@ -15,14 +15,8 @@ app = Flask(__name__)
 def home():
     return "OK", 200
 
-def run_web():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
-
 def iniciar_web():
-    t = threading.Thread(target=run_web)
-    t.daemon = True
-    t.start()
+    threading.Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000))), daemon=True).start()
 
 # =========================
 # CONFIG
@@ -39,18 +33,20 @@ if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
 klines = []
 trend = 0
 last_candle_time = None
-iniciado = False
+
+# 🔥 CONTROL REAL
+sincronizado = False
 
 # =========================
 # TELEGRAM
 # =========================
 def enviar_telegram(msg):
     try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        requests.post(url, data={
-            "chat_id": TELEGRAM_CHAT_ID,
-            "text": msg
-        }, timeout=3)
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+            data={"chat_id": TELEGRAM_CHAT_ID, "text": msg},
+            timeout=3
+        )
     except:
         pass
 
@@ -61,20 +57,11 @@ def ema(src, length):
     ema_vals = []
     k = 2 / (length + 1)
     for i, v in enumerate(src):
-        if i == 0:
-            ema_vals.append(v)
-        else:
-            ema_vals.append(v * k + ema_vals[i - 1] * (1 - k))
+        ema_vals.append(v if i == 0 else v * k + ema_vals[i - 1] * (1 - k))
     return ema_vals
 
 def sma(src, length):
-    out = []
-    for i in range(len(src)):
-        if i < length - 1:
-            out.append(None)
-        else:
-            out.append(sum(src[i - length + 1:i + 1]) / length)
-    return out
+    return [None if i < length - 1 else sum(src[i - length + 1:i + 1]) / length for i in range(len(src))]
 
 # =========================
 # HISTÓRICO
@@ -82,29 +69,27 @@ def sma(src, length):
 def cargar_historico():
     global klines, last_candle_time
 
-    url = f"https://fapi.binance.com/fapi/v1/klines?symbol={SYMBOL.upper()}&interval={INTERVAL}&limit=500"
-    data = requests.get(url).json()
+    data = requests.get(
+        f"https://fapi.binance.com/fapi/v1/klines?symbol={SYMBOL.upper()}&interval={INTERVAL}&limit=500"
+    ).json()
 
-    klines = []
-    for k in data:
-        klines.append({
-            "open": float(k[1]),
-            "high": float(k[2]),
-            "low": float(k[3]),
-            "close": float(k[4]),
-            "time": k[6]
-        })
+    klines = [{
+        "open": float(k[1]),
+        "high": float(k[2]),
+        "low": float(k[3]),
+        "close": float(k[4]),
+        "time": k[6]
+    } for k in data]
 
     last_candle_time = klines[-1]["time"]
 
     print("📊 Histórico cargado", flush=True)
 
 # =========================
-# 🔥 SINCRONIZAR TREND (CLAVE)
+# SINCRONIZAR TREND
 # =========================
 def sincronizar_trend():
     global trend
-
     señal = calcular_senal()
 
     if señal == "BUY":
@@ -112,7 +97,7 @@ def sincronizar_trend():
     elif señal == "SELL":
         trend = -1
 
-    print(f"🧠 Trend sincronizado: {trend}", flush=True)
+    print(f"🧠 Trend inicial: {trend}", flush=True)
 
 # =========================
 # SEÑALES (NO TOCAR)
@@ -123,61 +108,55 @@ def calcular_senal():
     if len(klines) < 100:
         return None
 
+    close = [k["close"] for k in klines]
     open_ = [k["open"] for k in klines]
     high = [k["high"] for k in klines]
     low = [k["low"] for k in klines]
-    close = [k["close"] for k in klines]
 
-    ohlc4 = [(o + h + l + c) / 4 for o, h, l, c in zip(open_, high, low, close)]
+    ohlc4 = [(o+h+l+c)/4 for o,h,l,c in zip(open_,high,low,close)]
 
-    haOpen = [0.0] * len(ohlc4)
-    for i in range(len(ohlc4)):
-        if i == 0:
-            haOpen[i] = ohlc4[i] / 2
-        else:
-            haOpen[i] = (ohlc4[i] + haOpen[i - 1]) / 2
+    haOpen = [ohlc4[0]/2]
+    for i in range(1,len(ohlc4)):
+        haOpen.append((ohlc4[i]+haOpen[i-1])/2)
 
-    haC = [
-        (ohlc4[i] + haOpen[i] + max(high[i], haOpen[i]) + min(low[i], haOpen[i])) / 4
-        for i in range(len(close))
-    ]
+    haC = [(ohlc4[i]+haOpen[i]+max(high[i],haOpen[i])+min(low[i],haOpen[i]))/4 for i in range(len(close))]
 
-    L = 2
+    L=2
 
-    EMA1 = ema(haC, L)
-    EMA2 = ema(EMA1, L)
-    EMA3 = ema(EMA2, L)
-    TMA1 = [3 * EMA1[i] - 3 * EMA2[i] + EMA3[i] for i in range(len(close))]
+    EMA1=ema(haC,L)
+    EMA2=ema(EMA1,L)
+    EMA3=ema(EMA2,L)
+    TMA1=[3*EMA1[i]-3*EMA2[i]+EMA3[i] for i in range(len(close))]
 
-    EMA4 = ema(TMA1, L)
-    EMA5 = ema(EMA4, L)
-    EMA6 = ema(EMA5, L)
-    TMA2 = [3 * EMA4[i] - 3 * EMA5[i] + EMA6[i] for i in range(len(close))]
+    EMA4=ema(TMA1,L)
+    EMA5=ema(EMA4,L)
+    EMA6=ema(EMA5,L)
+    TMA2=[3*EMA4[i]-3*EMA5[i]+EMA6[i] for i in range(len(close))]
 
-    mavi = TMA1
-    kirmizi = TMA2
+    mavi=TMA1
+    kirmizi=TMA2
 
-    i = -1
+    i=-1
 
-    cruce_up = mavi[i] > kirmizi[i] and mavi[i - 1] <= kirmizi[i - 1]
-    cruce_down = mavi[i] < kirmizi[i] and mavi[i - 1] >= kirmizi[i - 1]
+    cruce_up = mavi[i] > kirmizi[i] and mavi[i-1] <= kirmizi[i-1]
+    cruce_down = mavi[i] < kirmizi[i] and mavi[i-1] >= kirmizi[i-1]
 
-    confirm_up = mavi[i] > mavi[i - 1]
-    confirm_down = mavi[i] < mavi[i - 1]
+    confirm_up = mavi[i] > mavi[i-1]
+    confirm_down = mavi[i] < mavi[i-1]
 
-    dist = [abs(mavi[j] - kirmizi[j]) for j in range(len(mavi))]
-    dist_media = sma(dist, 30)
+    dist=[abs(mavi[j]-kirmizi[j]) for j in range(len(mavi))]
+    dist_media=sma(dist,30)
 
     if dist_media[i] is None:
         return None
 
-    filtro_vol = dist[i] > dist_media[i] * 0.3
+    filtro = dist[i] > dist_media[i]*0.3
 
-    if cruce_up and confirm_up and filtro_vol and trend != 1:
+    if cruce_up and confirm_up and filtro and trend != 1:
         trend = 1
         return "BUY"
 
-    elif cruce_down and confirm_down and filtro_vol and trend != -1:
+    if cruce_down and confirm_down and filtro and trend != -1:
         trend = -1
         return "SELL"
 
@@ -187,50 +166,47 @@ def calcular_senal():
 # WEBSOCKET
 # =========================
 def on_message(ws, message):
-    global klines, last_candle_time, iniciado
+    global klines, last_candle_time, sincronizado
 
-    data = json.loads(message)
-    k = data['k']
+    data=json.loads(message)
+    k=data['k']
 
     if not k["x"]:
         return
 
-    candle_time = k["T"]
+    candle_time=k["T"]
 
-    # 🔥 IGNORAR HISTÓRICO
     if candle_time <= last_candle_time:
         return
 
-    last_candle_time = candle_time
+    last_candle_time=candle_time
 
-    candle = {
-        "open": float(k["o"]),
-        "high": float(k["h"]),
-        "low": float(k["l"]),
-        "close": float(k["c"]),
-        "time": candle_time
+    candle={
+        "open":float(k["o"]),
+        "high":float(k["h"]),
+        "low":float(k["l"]),
+        "close":float(k["c"]),
+        "time":candle_time
     }
 
     klines.append(candle)
-
-    if len(klines) > 500:
+    if len(klines)>500:
         klines.pop(0)
 
-    # 🔥 PRIMERA VELA SOLO SINCRONIZA
-    if not iniciado:
-        iniciado = True
-        print("🧠 Bot listo, ahora sí opera", flush=True)
+    señal=calcular_senal()
+
+    # 🔥 FASE DE SINCRONIZACIÓN REAL
+    if not sincronizado:
+        if señal:
+            sincronizado = True
+            print("✅ Sincronizado con mercado", flush=True)
         return
 
-    señal = calcular_senal()
-
     if señal:
-        precio = candle["close"]
+        precio=candle["close"]
         print(f"🚀 {señal} | {precio}", flush=True)
 
-        enviar_telegram(
-            f"🚀 {señal}\n💰 Precio: {precio}"
-        )
+        enviar_telegram(f"🚀 {señal}\n💰 Precio: {precio}")
 
 # =========================
 # KEEP ALIVE
@@ -247,15 +223,11 @@ def keep_alive():
 # WS START
 # =========================
 def iniciar_ws():
-    socket_url = f"wss://fstream.binance.com/ws/{SYMBOL}@kline_{INTERVAL}"
+    url=f"wss://fstream.binance.com/ws/{SYMBOL}@kline_{INTERVAL}"
 
     while True:
         try:
-            ws = websocket.WebSocketApp(
-                socket_url,
-                on_message=on_message
-            )
-            ws.run_forever()
+            websocket.WebSocketApp(url,on_message=on_message).run_forever()
         except:
             print("⚠️ Reconectando...", flush=True)
             time.sleep(5)
@@ -263,15 +235,15 @@ def iniciar_ws():
 # =========================
 # MAIN
 # =========================
-if __name__ == "__main__":
-    print("🚀 BOT FINAL PRO INICIADO", flush=True)
+if __name__=="__main__":
+    print("🚀 BOT DEFINITIVO INICIADO", flush=True)
 
     iniciar_web()
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT ACTIVO (PRO REALTIME)")
+    enviar_telegram("🤖 BOT ACTIVO (SIN SEÑALES FALSAS)")
 
     cargar_historico()
-    sincronizar_trend()  # 🔥 CLAVE
+    sincronizar_trend()
 
     iniciar_ws()
