@@ -236,7 +236,7 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__=="__main__":
-    print("🚀 BOT DEFINITIVO PRO INICIADO", flush=True)
+    print("🚀 BOT DEFINITIVO INICIADO", flush=True)
 
     iniciar_web()
     threading.Thread(target=keep_alive, daemon=True).start()
