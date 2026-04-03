@@ -39,9 +39,10 @@ if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
 klines = []
 trend = 0
 last_candle_time = None
-
-# 🔥 CONTROL REAL
 velas_reales = 0
+
+# 🔥 NUEVO CONTROL
+ultima_senal = None
 
 # =========================
 # TELEGRAM
@@ -180,7 +181,7 @@ def calcular_senal():
 # WEBSOCKET
 # =========================
 def on_message(ws, message):
-    global klines, last_candle_time, velas_reales
+    global klines, last_candle_time, velas_reales, ultima_senal
 
     data = json.loads(message)
     k = data['k']
@@ -190,7 +191,6 @@ def on_message(ws, message):
 
     candle_time = k["T"]
 
-    # 🔥 BLOQUEAR HISTÓRICO
     if candle_time <= last_candle_time:
         return
 
@@ -211,10 +211,14 @@ def on_message(ws, message):
 
     señal = calcular_senal()
 
-    # 🔥 DESDE LA PRIMERA VELA YA OPERA
-    if velas_reales >= 1 and señal:
-        precio = candle["close"]
+    # 🔥 BLOQUEO ANTI REPETICIÓN (CLAVE)
+    if señal == ultima_senal:
+        return
 
+    if velas_reales >= 1 and señal:
+        ultima_senal = señal
+
+        precio = candle["close"]
         print(f"🚀 {señal} | {precio}", flush=True)
 
         enviar_telegram(
@@ -240,10 +244,7 @@ def iniciar_ws():
 
     while True:
         try:
-            websocket.WebSocketApp(
-                url,
-                on_message=on_message
-            ).run_forever()
+            websocket.WebSocketApp(url, on_message=on_message).run_forever()
         except:
             print("⚠️ Reconectando...", flush=True)
             time.sleep(5)
@@ -252,12 +253,12 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT FINAL ULTRA INICIADO", flush=True)
+    print("🚀 BOT FINAL ANTI-FANTASMA INICIADO", flush=True)
 
     iniciar_web()
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT ULTRA ACTIVO")
+    enviar_telegram("🤖 BOT ACTIVO (ANTI FALSAS SEÑALES)")
 
     cargar_historico()
     sincronizar_trend()
