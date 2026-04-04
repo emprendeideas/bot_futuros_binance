@@ -40,9 +40,17 @@ klines = []
 trend = 0
 last_candle_time = None
 
-# 🔥 CONTROL PROFESIONAL
 velas_reales = 0
 ultima_senal_enviada = None
+
+# =========================
+# 💰 TRADING SIMULADO
+# =========================
+capital = 100.0
+posicion = None
+entry_price = 0.0
+trades = 0
+FEE = 0.0005
 
 # =========================
 # TELEGRAM
@@ -182,6 +190,43 @@ def calcular_senal():
     return None
 
 # =========================
+# 💰 EJECUCIÓN TRADE
+# =========================
+def ejecutar_trade(señal, precio):
+    global capital, posicion, entry_price, trades
+
+    # CERRAR
+    if posicion is not None:
+        if posicion == "BUY":
+            pnl = (precio - entry_price) / entry_price
+        else:
+            pnl = (entry_price - precio) / entry_price
+
+        capital *= (1 + pnl)
+        capital *= (1 - FEE)
+
+        trades += 1
+
+        enviar_telegram(
+            f"❌ CIERRE {posicion}\n"
+            f"💰 Capital: {capital:.2f} USDT\n"
+            f"📊 PnL: {pnl*100:.2f}%\n"
+            f"🔢 Trades: {trades}"
+        )
+
+    # ABRIR
+    posicion = señal
+    entry_price = precio
+
+    capital *= (1 - FEE)
+
+    enviar_telegram(
+        f"🚀 APERTURA {señal}\n"
+        f"💰 Precio: {precio}\n"
+        f"💼 Capital: {capital:.2f} USDT"
+    )
+
+# =========================
 # WEBSOCKET
 # =========================
 def on_message(ws, message):
@@ -195,7 +240,6 @@ def on_message(ws, message):
 
     candle_time = k["T"]
 
-    # 🔥 BLOQUEAR HISTÓRICO
     if candle_time <= last_candle_time:
         return
 
@@ -218,7 +262,6 @@ def on_message(ws, message):
 
     if velas_reales >= 1 and señal:
 
-        # 🔥 BLOQUEO ANTI-SEÑALES PASADAS / REPETIDAS
         if señal == ultima_senal_enviada:
             print("⛔ Señal repetida ignorada", flush=True)
             return
@@ -229,9 +272,7 @@ def on_message(ws, message):
 
         print(f"🚀 {señal} | {precio}", flush=True)
 
-        enviar_telegram(
-            f"🚀 {señal}\n💰 Precio: {precio}"
-        )
+        ejecutar_trade(señal, precio)
 
 # =========================
 # KEEP ALIVE
@@ -264,12 +305,12 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT FINAL ULTRA PRO INICIADO", flush=True)
+    print("🚀 BOT FINAL ULTRA PRO + TRADING INICIADO", flush=True)
 
     iniciar_web()
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT ULTRA PRO ACTIVO")
+    enviar_telegram("🤖 BOT ULTRA PRO + TRADING ACTIVO")
 
     cargar_historico()
     sincronizar_trend()
