@@ -348,9 +348,12 @@ def on_message(ws, message):
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT FINAL ABSOLUTO", flush=True)
+    print("🚀 BOT PERFECTO ACTIVADO", flush=True)
 
     iniciar_web()
+
+    # 🔥 Mensaje Telegram
+    enviar_telegram("🤖 BOT PERFECTO ACTIVADO")
 
     cargar_historico()
     sincronizar_trend()
