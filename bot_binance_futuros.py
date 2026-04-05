@@ -41,8 +41,8 @@ trend = 0
 last_candle_time = None
 
 # 🔥 MEMORIA REAL
-ultima_senal_historica = None  # señal antes de iniciar
-primera_senal_valida = False   # control inicio
+ultima_senal_historica = None
+primera_senal_valida = False
 
 # =========================
 # 💰 TRADING SIMULADO
@@ -106,32 +106,97 @@ def cargar_historico():
     print("📊 Histórico cargado", flush=True)
 
 # =========================
-# SINCRONIZAR TREND + MEMORIA
+# 🔥 DETECTAR ÚLTIMA SEÑAL REAL DEL HISTÓRICO
+# =========================
+def obtener_ultima_senal_real():
+    global trend
+
+    if len(klines) < 100:
+        return None
+
+    close = [k["close"] for k in klines]
+    open_ = [k["open"] for k in klines]
+    high = [k["high"] for k in klines]
+    low = [k["low"] for k in klines]
+
+    ohlc4 = [(o+h+l+c)/4 for o,h,l,c in zip(open_,high,low,close)]
+
+    haOpen = [ohlc4[0]/2]
+    for i in range(1,len(ohlc4)):
+        haOpen.append((ohlc4[i]+haOpen[i-1])/2)
+
+    haC = [
+        (ohlc4[i]+haOpen[i]+max(high[i],haOpen[i])+min(low[i],haOpen[i]))/4
+        for i in range(len(close))
+    ]
+
+    L=25
+
+    EMA1=ema(haC,L)
+    EMA2=ema(EMA1,L)
+    EMA3=ema(EMA2,L)
+    TMA1=[3*EMA1[i]-3*EMA2[i]+EMA3[i] for i in range(len(close))]
+
+    EMA4=ema(TMA1,L)
+    EMA5=ema(EMA4,L)
+    EMA6=ema(EMA5,L)
+    TMA2=[3*EMA4[i]-3*EMA5[i]+EMA6[i] for i in range(len(close))]
+
+    mavi=TMA1
+    kirmizi=TMA2
+
+    dist=[abs(mavi[j]-kirmizi[j]) for j in range(len(mavi))]
+    dist_media=sma(dist,30)
+
+    ultima = None
+    temp_trend = 0
+
+    for i in range(1, len(close)):
+
+        if dist_media[i] is None:
+            continue
+
+        cruce_up = mavi[i] > kirmizi[i] and mavi[i-1] <= kirmizi[i-1]
+        cruce_down = mavi[i] < kirmizi[i] and mavi[i-1] >= kirmizi[i-1]
+
+        confirm_up = mavi[i] > mavi[i-1]
+        confirm_down = mavi[i] < mavi[i-1]
+
+        filtro = dist[i] > dist_media[i]*0.3
+
+        if cruce_up and confirm_up and filtro and temp_trend != 1:
+            temp_trend = 1
+            ultima = "BUY"
+
+        elif cruce_down and confirm_down and filtro and temp_trend != -1:
+            temp_trend = -1
+            ultima = "SELL"
+
+    trend = temp_trend
+    return ultima
+
+# =========================
+# SINCRONIZACIÓN
 # =========================
 def sincronizar_trend():
-    global trend, ultima_senal_historica
+    global ultima_senal_historica
 
-    señal = calcular_senal()
+    ultima_senal_historica = obtener_ultima_senal_real()
 
-    if señal == "BUY":
-        trend = 1
-        ultima_senal_historica = "BUY"
-
-    elif señal == "SELL":
-        trend = -1
-        ultima_senal_historica = "SELL"
-
-    print(f"🧠 Trend inicial: {trend}", flush=True)
-    print(f"📌 Última señal histórica: {ultima_senal_historica}", flush=True)
+    if ultima_senal_historica == "BUY":
+        esperar = "SELL"
+    elif ultima_senal_historica == "SELL":
+        esperar = "BUY"
+    else:
+        esperar = "BUY o SELL"
 
     enviar_telegram(
-        f"🤖 BOT INICIADO\n"
         f"📌 Última señal detectada: {ultima_senal_historica}\n"
-        f"⏳ Esperando señal OPUESTA para operar..."
+        f"⏳ Esperando señal {esperar} para operar..."
     )
 
 # =========================
-# SEÑALES (NO TOCAR)
+# SEÑALES (TIEMPO REAL)
 # =========================
 def calcular_senal():
     global trend
@@ -197,7 +262,7 @@ def calcular_senal():
     return None
 
 # =========================
-# 💰 TRADING
+# TRADING
 # =========================
 def ejecutar_trade(señal, precio):
     global capital, posicion, entry_price, trades
@@ -266,13 +331,11 @@ def on_message(ws, message):
     if not señal:
         return
 
-    # 🔥 FILTRO DEFINITIVO
+    # 🔥 BLOQUEO DEFINITIVO
     if not primera_senal_valida:
         if señal != ultima_senal_historica:
             primera_senal_valida = True
-            print("✅ Primera señal REAL detectada", flush=True)
         else:
-            print("⛔ Ignorando señal histórica", flush=True)
             return
 
     precio = candle["close"]
@@ -285,23 +348,14 @@ def on_message(ws, message):
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT DEFINITIVO FINAL ABSOLUTO", flush=True)
+    print("🚀 BOT FINAL ABSOLUTO", flush=True)
 
     iniciar_web()
-
-    enviar_telegram("🤖 BOT ULTRA PRO ACTIVO")
 
     cargar_historico()
     sincronizar_trend()
 
-    iniciar_ws = lambda: websocket.WebSocketApp(
+    websocket.WebSocketApp(
         f"wss://fstream.binance.com/ws/{SYMBOL}@kline_{INTERVAL}",
         on_message=on_message
     ).run_forever()
-
-    while True:
-        try:
-            iniciar_ws()
-        except:
-            print("⚠️ Reconectando...", flush=True)
-            time.sleep(5)
