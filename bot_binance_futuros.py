@@ -40,9 +40,9 @@ klines = []
 trend = 0
 last_candle_time = None
 
-velas_reales = 0
-ultima_senal_enviada = None
-ultimo_cruce_id = None  # 🔥 CLAVE
+# 🔥 MEMORIA REAL
+ultima_senal_historica = None  # señal antes de iniciar
+primera_senal_valida = False   # control inicio
 
 # =========================
 # 💰 TRADING SIMULADO
@@ -106,31 +106,38 @@ def cargar_historico():
     print("📊 Histórico cargado", flush=True)
 
 # =========================
-# SINCRONIZAR TREND
+# SINCRONIZAR TREND + MEMORIA
 # =========================
 def sincronizar_trend():
-    global trend, ultima_senal_enviada
+    global trend, ultima_senal_historica
 
     señal = calcular_senal()
 
     if señal == "BUY":
         trend = 1
-        ultima_senal_enviada = "BUY"
+        ultima_senal_historica = "BUY"
 
     elif señal == "SELL":
         trend = -1
-        ultima_senal_enviada = "SELL"
+        ultima_senal_historica = "SELL"
 
     print(f"🧠 Trend inicial: {trend}", flush=True)
+    print(f"📌 Última señal histórica: {ultima_senal_historica}", flush=True)
+
+    enviar_telegram(
+        f"🤖 BOT INICIADO\n"
+        f"📌 Última señal detectada: {ultima_senal_historica}\n"
+        f"⏳ Esperando señal OPUESTA para operar..."
+    )
 
 # =========================
-# SEÑALES (MODIFICADO SOLO ID)
+# SEÑALES (NO TOCAR)
 # =========================
 def calcular_senal():
-    global trend, ultimo_cruce_id
+    global trend
 
     if len(klines) < 100:
-        return None, None
+        return None
 
     close = [k["close"] for k in klines]
     open_ = [k["open"] for k in klines]
@@ -165,8 +172,6 @@ def calcular_senal():
 
     i=-1
 
-    cruce_id = f"{round(mavi[i],6)}-{round(kirmizi[i],6)}"
-
     cruce_up = mavi[i] > kirmizi[i] and mavi[i-1] <= kirmizi[i-1]
     cruce_down = mavi[i] < kirmizi[i] and mavi[i-1] >= kirmizi[i-1]
 
@@ -177,22 +182,22 @@ def calcular_senal():
     dist_media=sma(dist,30)
 
     if dist_media[i] is None:
-        return None, None
+        return None
 
     filtro = dist[i] > dist_media[i]*0.3
 
     if cruce_up and confirm_up and filtro and trend != 1:
         trend = 1
-        return "BUY", cruce_id
+        return "BUY"
 
     if cruce_down and confirm_down and filtro and trend != -1:
         trend = -1
-        return "SELL", cruce_id
+        return "SELL"
 
-    return None, None
+    return None
 
 # =========================
-# 💰 EJECUCIÓN TRADE
+# 💰 TRADING
 # =========================
 def ejecutar_trade(señal, precio):
     global capital, posicion, entry_price, trades
@@ -229,8 +234,7 @@ def ejecutar_trade(señal, precio):
 # WEBSOCKET
 # =========================
 def on_message(ws, message):
-    global klines, last_candle_time, velas_reales
-    global ultima_senal_enviada, ultimo_cruce_id
+    global klines, last_candle_time, primera_senal_valida
 
     data = json.loads(message)
     k = data['k']
@@ -244,7 +248,6 @@ def on_message(ws, message):
         return
 
     last_candle_time = candle_time
-    velas_reales += 1
 
     candle = {
         "open": float(k["o"]),
@@ -258,67 +261,47 @@ def on_message(ws, message):
     if len(klines) > 500:
         klines.pop(0)
 
-    señal, cruce_id = calcular_senal()
+    señal = calcular_senal()
 
-    if señal:
+    if not señal:
+        return
 
-        # 🔥 BLOQUEO DEFINITIVO
-        if cruce_id == ultimo_cruce_id:
-            print("⛔ Cruce repetido ignorado", flush=True)
+    # 🔥 FILTRO DEFINITIVO
+    if not primera_senal_valida:
+        if señal != ultima_senal_historica:
+            primera_senal_valida = True
+            print("✅ Primera señal REAL detectada", flush=True)
+        else:
+            print("⛔ Ignorando señal histórica", flush=True)
             return
 
-        if señal == ultima_senal_enviada:
-            print("⛔ Señal repetida ignorada", flush=True)
-            return
+    precio = candle["close"]
 
-        ultimo_cruce_id = cruce_id
-        ultima_senal_enviada = señal
+    print(f"🚀 {señal} | {precio}", flush=True)
 
-        precio = candle["close"]
-
-        print(f"🚀 {señal} | {precio}", flush=True)
-
-        ejecutar_trade(señal, precio)
-
-# =========================
-# KEEP ALIVE
-# =========================
-def keep_alive():
-    while True:
-        try:
-            requests.get("http://127.0.0.1:10000", timeout=2)
-        except:
-            pass
-        time.sleep(60)
-
-# =========================
-# WS START
-# =========================
-def iniciar_ws():
-    url = f"wss://fstream.binance.com/ws/{SYMBOL}@kline_{INTERVAL}"
-
-    while True:
-        try:
-            websocket.WebSocketApp(
-                url,
-                on_message=on_message
-            ).run_forever()
-        except:
-            print("⚠️ Reconectando...", flush=True)
-            time.sleep(5)
+    ejecutar_trade(señal, precio)
 
 # =========================
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT DEFINITIVO NIVEL DIOS", flush=True)
+    print("🚀 BOT DEFINITIVO FINAL ABSOLUTO", flush=True)
 
     iniciar_web()
-    threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT NIVEL DIOS ACTIVO")
+    enviar_telegram("🤖 BOT ULTRA PRO ACTIVO")
 
     cargar_historico()
     sincronizar_trend()
 
-    iniciar_ws()
+    iniciar_ws = lambda: websocket.WebSocketApp(
+        f"wss://fstream.binance.com/ws/{SYMBOL}@kline_{INTERVAL}",
+        on_message=on_message
+    ).run_forever()
+
+    while True:
+        try:
+            iniciar_ws()
+        except:
+            print("⚠️ Reconectando...", flush=True)
+            time.sleep(5)
