@@ -42,7 +42,7 @@ last_candle_time = None
 
 velas_reales = 0
 ultima_senal_enviada = None
-ultima_senal_time = None   # 🔥 NUEVO FILTRO CLAVE
+ultimo_cruce_id = None  # 🔥 CLAVE
 
 # =========================
 # 💰 TRADING SIMULADO
@@ -122,16 +122,15 @@ def sincronizar_trend():
         ultima_senal_enviada = "SELL"
 
     print(f"🧠 Trend inicial: {trend}", flush=True)
-    print(f"🚫 Bloqueando repetición inicial: {ultima_senal_enviada}", flush=True)
 
 # =========================
-# SEÑALES (NO TOCAR)
+# SEÑALES (MODIFICADO SOLO ID)
 # =========================
 def calcular_senal():
-    global trend
+    global trend, ultimo_cruce_id
 
     if len(klines) < 100:
-        return None
+        return None, None
 
     close = [k["close"] for k in klines]
     open_ = [k["open"] for k in klines]
@@ -166,6 +165,8 @@ def calcular_senal():
 
     i=-1
 
+    cruce_id = f"{round(mavi[i],6)}-{round(kirmizi[i],6)}"
+
     cruce_up = mavi[i] > kirmizi[i] and mavi[i-1] <= kirmizi[i-1]
     cruce_down = mavi[i] < kirmizi[i] and mavi[i-1] >= kirmizi[i-1]
 
@@ -176,19 +177,19 @@ def calcular_senal():
     dist_media=sma(dist,30)
 
     if dist_media[i] is None:
-        return None
+        return None, None
 
     filtro = dist[i] > dist_media[i]*0.3
 
     if cruce_up and confirm_up and filtro and trend != 1:
         trend = 1
-        return "BUY"
+        return "BUY", cruce_id
 
     if cruce_down and confirm_down and filtro and trend != -1:
         trend = -1
-        return "SELL"
+        return "SELL", cruce_id
 
-    return None
+    return None, None
 
 # =========================
 # 💰 EJECUCIÓN TRADE
@@ -229,7 +230,7 @@ def ejecutar_trade(señal, precio):
 # =========================
 def on_message(ws, message):
     global klines, last_candle_time, velas_reales
-    global ultima_senal_enviada, ultima_senal_time
+    global ultima_senal_enviada, ultimo_cruce_id
 
     data = json.loads(message)
     k = data['k']
@@ -257,21 +258,21 @@ def on_message(ws, message):
     if len(klines) > 500:
         klines.pop(0)
 
-    señal = calcular_senal()
+    señal, cruce_id = calcular_senal()
 
     if señal:
 
-        # 🔥 FILTRO DEFINITIVO
-        if ultima_senal_time is not None and candle_time <= ultima_senal_time:
-            print("⛔ Señal antigua ignorada (TIEMPO)", flush=True)
+        # 🔥 BLOQUEO DEFINITIVO
+        if cruce_id == ultimo_cruce_id:
+            print("⛔ Cruce repetido ignorado", flush=True)
             return
 
         if señal == ultima_senal_enviada:
             print("⛔ Señal repetida ignorada", flush=True)
             return
 
+        ultimo_cruce_id = cruce_id
         ultima_senal_enviada = señal
-        ultima_senal_time = candle_time
 
         precio = candle["close"]
 
@@ -310,12 +311,12 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT DEFINITIVO 100% CORREGIDO", flush=True)
+    print("🚀 BOT DEFINITIVO NIVEL DIOS", flush=True)
 
     iniciar_web()
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT 100% ACTIVO")
+    enviar_telegram("🤖 BOT NIVEL DIOS ACTIVO")
 
     cargar_historico()
     sincronizar_trend()
