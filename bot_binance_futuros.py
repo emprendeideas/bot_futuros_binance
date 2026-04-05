@@ -42,6 +42,7 @@ last_candle_time = None
 
 velas_reales = 0
 ultima_senal_enviada = None
+ultima_senal_time = None   # 🔥 NUEVO FILTRO CLAVE
 
 # =========================
 # 💰 TRADING SIMULADO
@@ -195,7 +196,6 @@ def calcular_senal():
 def ejecutar_trade(señal, precio):
     global capital, posicion, entry_price, trades
 
-    # CERRAR
     if posicion is not None:
         if posicion == "BUY":
             pnl = (precio - entry_price) / entry_price
@@ -214,10 +214,8 @@ def ejecutar_trade(señal, precio):
             f"🔢 Trades: {trades}"
         )
 
-    # ABRIR
     posicion = señal
     entry_price = precio
-
     capital *= (1 - FEE)
 
     enviar_telegram(
@@ -230,7 +228,8 @@ def ejecutar_trade(señal, precio):
 # WEBSOCKET
 # =========================
 def on_message(ws, message):
-    global klines, last_candle_time, velas_reales, ultima_senal_enviada
+    global klines, last_candle_time, velas_reales
+    global ultima_senal_enviada, ultima_senal_time
 
     data = json.loads(message)
     k = data['k']
@@ -260,13 +259,19 @@ def on_message(ws, message):
 
     señal = calcular_senal()
 
-    if velas_reales >= 1 and señal:
+    if señal:
+
+        # 🔥 FILTRO DEFINITIVO
+        if ultima_senal_time is not None and candle_time <= ultima_senal_time:
+            print("⛔ Señal antigua ignorada (TIEMPO)", flush=True)
+            return
 
         if señal == ultima_senal_enviada:
             print("⛔ Señal repetida ignorada", flush=True)
             return
 
         ultima_senal_enviada = señal
+        ultima_senal_time = candle_time
 
         precio = candle["close"]
 
@@ -305,12 +310,12 @@ def iniciar_ws():
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT FINAL ULTRA PRO + TRADING INICIADO", flush=True)
+    print("🚀 BOT DEFINITIVO 100% CORREGIDO", flush=True)
 
     iniciar_web()
     threading.Thread(target=keep_alive, daemon=True).start()
 
-    enviar_telegram("🤖 BOT ULTRA PRO + TRADING ACTIVO")
+    enviar_telegram("🤖 BOT 100% ACTIVO")
 
     cargar_historico()
     sincronizar_trend()
