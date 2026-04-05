@@ -183,12 +183,12 @@ def sincronizar_trend():
 
     ultima_senal_historica = obtener_ultima_senal_real()
 
-    if ultima_senal_historica == "BUY":
-        esperar = "SELL"
-    elif ultima_senal_historica == "SELL":
-        esperar = "BUY"
+    if ultima_senal_historica == "BUY 🔼":
+        esperar = "SELL 🔽"
+    elif ultima_senal_historica == "SELL 🔽":
+        esperar = "BUY 🔼"
     else:
-        esperar = "BUY o SELL"
+        esperar = "BUY 🔼 o SELL 🔽"
 
     enviar_telegram(
         f"📌 Última señal detectada: {ultima_senal_historica}\n"
