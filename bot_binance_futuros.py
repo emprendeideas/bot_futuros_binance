@@ -30,6 +30,8 @@ def iniciar_web():
 SYMBOL = "adausdt"
 INTERVAL = "5m"
 
+EMA_LENGTH = 38
+
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
@@ -130,7 +132,7 @@ def obtener_ultima_senal_real():
         for i in range(len(close))
     ]
 
-    L=25
+    L = EMA_LENGTH
 
     EMA1=ema(haC,L)
     EMA2=ema(EMA1,L)
@@ -226,7 +228,7 @@ def calcular_senal():
         for i in range(len(close))
     ]
 
-    L=38
+    L = EMA_LENGTH
 
     EMA1=ema(haC,L)
     EMA2=ema(EMA1,L)
