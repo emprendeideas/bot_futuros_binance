@@ -29,22 +29,24 @@ def iniciar_web():
 # =========================
 SYMBOL = "adausdt"
 INTERVAL = "5m"
-
 EMA_LENGTH = 38
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+TELEGRAM_CHAT_ID = str(os.getenv("TELEGRAM_CHAT_ID"))     # GRUPO
+TELEGRAM_ADMIN_ID = str(os.getenv("TELEGRAM_ADMIN_ID"))   # PRIVADO
 
-if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-    raise ValueError("❌ Falta TELEGRAM_TOKEN o TELEGRAM_CHAT_ID")
+if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID or not TELEGRAM_ADMIN_ID:
+    raise ValueError("❌ Faltan variables de entorno")
 
 klines = []
 trend = 0
 last_candle_time = None
 
-# 🔥 MEMORIA REAL
 ultima_senal_historica = None
 primera_senal_valida = False
+
+bot_pausado = False
+ultimo_precio = 0
 
 # =========================
 # 💰 TRADING SIMULADO
@@ -58,15 +60,33 @@ FEE = 0.0005
 # =========================
 # TELEGRAM
 # =========================
-def enviar_telegram(msg):
+def enviar_telegram(msg, chat_id=None, botones=None):
     try:
-        requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-            data={"chat_id": TELEGRAM_CHAT_ID, "text": msg},
-            timeout=3
-        )
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+
+        data = {
+            "chat_id": chat_id if chat_id else TELEGRAM_CHAT_ID,
+            "text": msg
+        }
+
+        if botones:
+            data["reply_markup"] = json.dumps({
+                "inline_keyboard": botones
+            })
+
+        requests.post(url, data=data, timeout=3)
     except:
         pass
+
+def enviar_panel():
+    botones = [
+        [{"text": "📊 Estado", "callback_data": "status"}],
+        [{"text": "🟡 Cerrar operación", "callback_data": "close"}],
+        [{"text": "🔴 Pausar bot", "callback_data": "pause"}],
+        [{"text": "🟢 Reanudar bot", "callback_data": "resume"}],
+    ]
+
+    enviar_telegram("🎛 PANEL DE CONTROL", TELEGRAM_ADMIN_ID, botones)
 
 # =========================
 # EMA / SMA
@@ -105,10 +125,8 @@ def cargar_historico():
 
     last_candle_time = klines[-1]["time"]
 
-    print("📊 Histórico cargado", flush=True)
-
 # =========================
-# 🔥 DETECTAR ÚLTIMA SEÑAL REAL DEL HISTÓRICO
+# DETECTAR ÚLTIMA SEÑAL
 # =========================
 def obtener_ultima_senal_real():
     global trend
@@ -127,10 +145,7 @@ def obtener_ultima_senal_real():
     for i in range(1,len(ohlc4)):
         haOpen.append((ohlc4[i]+haOpen[i-1])/2)
 
-    haC = [
-        (ohlc4[i]+haOpen[i]+max(high[i],haOpen[i])+min(low[i],haOpen[i]))/4
-        for i in range(len(close))
-    ]
+    haC = [(ohlc4[i]+haOpen[i]+max(high[i],haOpen[i])+min(low[i],haOpen[i]))/4 for i in range(len(close))]
 
     L = EMA_LENGTH
 
@@ -154,7 +169,6 @@ def obtener_ultima_senal_real():
     temp_trend = 0
 
     for i in range(1, len(close)):
-
         if dist_media[i] is None:
             continue
 
@@ -169,7 +183,6 @@ def obtener_ultima_senal_real():
         if cruce_up and confirm_up and filtro and temp_trend != 1:
             temp_trend = 1
             ultima = "BUY"
-
         elif cruce_down and confirm_down and filtro and temp_trend != -1:
             temp_trend = -1
             ultima = "SELL"
@@ -177,7 +190,6 @@ def obtener_ultima_senal_real():
     trend = temp_trend
     return ultima
 
-# =========================
 # =========================
 # SINCRONIZACIÓN
 # =========================
@@ -189,11 +201,9 @@ def sincronizar_trend():
     if ultima_senal_historica == "BUY":
         ultima_txt = "BUY 🔼"
         esperar = "SELL 🔽"
-
     elif ultima_senal_historica == "SELL":
         ultima_txt = "SELL 🔽"
         esperar = "BUY 🔼"
-
     else:
         ultima_txt = "None"
         esperar = "BUY 🔼 / SELL 🔽"
@@ -204,7 +214,7 @@ def sincronizar_trend():
     )
 
 # =========================
-# SEÑALES (TIEMPO REAL)
+# SEÑALES
 # =========================
 def calcular_senal():
     global trend
@@ -223,10 +233,7 @@ def calcular_senal():
     for i in range(1,len(ohlc4)):
         haOpen.append((ohlc4[i]+haOpen[i-1])/2)
 
-    haC = [
-        (ohlc4[i]+haOpen[i]+max(high[i],haOpen[i])+min(low[i],haOpen[i]))/4
-        for i in range(len(close))
-    ]
+    haC = [(ohlc4[i]+haOpen[i]+max(high[i],haOpen[i])+min(low[i],haOpen[i]))/4 for i in range(len(close))]
 
     L = EMA_LENGTH
 
@@ -276,38 +283,68 @@ def ejecutar_trade(señal, precio):
     global capital, posicion, entry_price, trades
 
     if posicion is not None:
-        if posicion == "BUY":
-            pnl = (precio - entry_price) / entry_price
-        else:
-            pnl = (entry_price - precio) / entry_price
-
+        pnl = (precio - entry_price) / entry_price if posicion == "BUY" else (entry_price - precio) / entry_price
         capital *= (1 + pnl)
         capital *= (1 - FEE)
-
         trades += 1
 
-        enviar_telegram(
-            f"❌ CIERRE {posicion}\n"
-            f"💰 Capital: {capital:.2f} USDT\n"
-            f"📊 PnL: {pnl*100:.2f}%\n"
-            f"🔢 Trades: {trades}"
-        )
+        enviar_telegram(f"❌ CIERRE {posicion}\n💰 {capital:.2f} USDT\n📊 {pnl*100:.2f}%\n🔢 {trades}")
 
     posicion = señal
     entry_price = precio
     capital *= (1 - FEE)
 
-    enviar_telegram(
-        f"🚀 APERTURA {señal}\n"
-        f"💰 Precio: {precio}\n"
-        f"💼 Capital: {capital:.2f} USDT"
-    )
+    enviar_telegram(f"🚀 APERTURA {señal}\n💰 {precio}\n💼 {capital:.2f} USDT")
+
+# =========================
+# BOTONES
+# =========================
+def escuchar_botones():
+    global bot_pausado, posicion
+
+    offset = None
+
+    while True:
+        try:
+            res = requests.get(
+                f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates",
+                params={"timeout":10,"offset":offset}
+            ).json()
+
+            for update in res["result"]:
+                offset = update["update_id"] + 1
+
+                if "callback_query" in update:
+                    data = update["callback_query"]["data"]
+                    chat_id = str(update["callback_query"]["message"]["chat"]["id"])
+
+                    if chat_id != TELEGRAM_ADMIN_ID:
+                        continue
+
+                    if data == "status":
+                        enviar_telegram(f"📊 Capital: {capital:.2f}\n📍 Posición: {posicion}", TELEGRAM_ADMIN_ID)
+
+                    elif data == "close" and posicion:
+                        ejecutar_trade("SELL" if posicion=="BUY" else "BUY", ultimo_precio)
+
+                    elif data == "pause":
+                        bot_pausado = True
+                        enviar_telegram("🔴 Bot pausado", TELEGRAM_ADMIN_ID)
+
+                    elif data == "resume":
+                        bot_pausado = False
+                        enviar_telegram("🟢 Bot reanudado", TELEGRAM_ADMIN_ID)
+
+        except:
+            pass
+
+        time.sleep(2)
 
 # =========================
 # WEBSOCKET
 # =========================
 def on_message(ws, message):
-    global klines, last_candle_time, primera_senal_valida
+    global klines, last_candle_time, primera_senal_valida, ultimo_precio
 
     data = json.loads(message)
     k = data['k']
@@ -315,20 +352,20 @@ def on_message(ws, message):
     if not k["x"]:
         return
 
-    candle_time = k["T"]
-
-    if candle_time <= last_candle_time:
+    if k["T"] <= last_candle_time:
         return
 
-    last_candle_time = candle_time
+    last_candle_time = k["T"]
 
     candle = {
         "open": float(k["o"]),
         "high": float(k["h"]),
         "low": float(k["l"]),
         "close": float(k["c"]),
-        "time": candle_time
+        "time": k["T"]
     }
+
+    ultimo_precio = candle["close"]
 
     klines.append(candle)
     if len(klines) > 500:
@@ -336,21 +373,16 @@ def on_message(ws, message):
 
     señal = calcular_senal()
 
-    if not señal:
+    if not señal or bot_pausado:
         return
 
-    # 🔥 BLOQUEO DEFINITIVO
     if not primera_senal_valida:
         if señal != ultima_senal_historica:
             primera_senal_valida = True
         else:
             return
 
-    precio = candle["close"]
-
-    print(f"🚀 {señal} | {precio}", flush=True)
-
-    ejecutar_trade(señal, precio)
+    ejecutar_trade(señal, candle["close"])
 
 # =========================
 # MAIN
@@ -360,8 +392,10 @@ if __name__ == "__main__":
 
     iniciar_web()
 
-    # 🔥 Mensaje Telegram
     enviar_telegram("🤖 BOT PERFECTO ACTIVADO")
+    enviar_panel()
+
+    threading.Thread(target=escuchar_botones, daemon=True).start()
 
     cargar_historico()
     sincronizar_trend()
