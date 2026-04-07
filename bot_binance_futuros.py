@@ -139,7 +139,7 @@ def manejar_botones(update: Update, context):
 
     elif data == "close":
         cerrar_manual()
-        query.edit_message_text("🟡 Operación cerrada manualmente")
+        query.edit_message_text("🔴 Operación cerrada manualmente")
 
     elif data == "saldo":
         query.edit_message_text(
@@ -337,6 +337,40 @@ def calcular_senal():
         return "SELL"
 
     return None
+
+# =========================
+# TRADING
+# =========================
+def ejecutar_trade(señal, precio):
+    global capital, posicion, entry_price, trades
+
+    if posicion is not None:
+        if posicion == "BUY":
+            pnl = (precio - entry_price) / entry_price
+        else:
+            pnl = (entry_price - precio) / entry_price
+
+        capital *= (1 + pnl)
+        capital *= (1 - FEE)
+
+        trades += 1
+
+        enviar_telegram(
+            f"❌ CIERRE {posicion}\n"
+            f"💰 Capital: {capital:.2f} USDT\n"
+            f"📊 PnL: {pnl*100:.2f}%\n"
+            f"🤖 Trades: {trades}"
+        )
+
+    posicion = señal
+    entry_price = precio
+    capital *= (1 - FEE)
+
+    enviar_telegram(
+        f"🚀 APERTURA {señal}\n"
+        f"💰 Precio: {precio}\n"
+        f"💼 Capital: {capital:.2f} USDT"
+    )
 
 # =========================
 # WEBSOCKET
