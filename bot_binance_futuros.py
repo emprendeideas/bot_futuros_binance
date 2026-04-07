@@ -80,7 +80,7 @@ def enviar_botones():
         [InlineKeyboardButton("⏸️ Pausar", callback_data="pause"),
          InlineKeyboardButton("▶️ Reanudar", callback_data="resume")],
         [InlineKeyboardButton("🔴 Cerrar operación", callback_data="close")],
-        [InlineKeyboardButton("💲 Saldo", callback_data="saldo")]
+        [InlineKeyboardButton("💰 Saldo", callback_data="saldo")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
