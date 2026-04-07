@@ -70,7 +70,7 @@ def enviar_telegram(msg):
         pass
 
 # =========================
-# TELEGRAM BOT (CONTROL)
+# TELEGRAM BOT
 # =========================
 bot = Bot(token=TELEGRAM_TOKEN)
 dispatcher = Dispatcher(bot, None, workers=0)
