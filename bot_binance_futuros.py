@@ -91,7 +91,7 @@ def enviar_botones():
     )
 
 # =========================
-# 🔥 CIERRE MANUAL (NUEVO)
+# 🔥 CIERRE MANUAL
 # =========================
 def cerrar_manual():
     global capital, posicion, entry_price, trades
