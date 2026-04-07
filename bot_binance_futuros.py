@@ -131,23 +131,45 @@ def manejar_botones(update: Update, context):
 
     if data == "pause":
         bot_activo = False
-        query.edit_message_text("⏸ Bot pausado")
+        bot.send_message(TELEGRAM_ADMIN_ID, "⏸ Bot pausado")
+        enviar_botones()
 
     elif data == "resume":
         bot_activo = True
-        query.edit_message_text("▶️ Bot reanudado")
+        bot.send_message(TELEGRAM_ADMIN_ID, "▶️ Bot reanudado")
+        enviar_botones()
 
     elif data == "close":
         cerrar_manual()
-        query.edit_message_text("🔴 Operación cerrada manualmente")
+        bot.send_message(TELEGRAM_ADMIN_ID, "🔴 Operación cerrada manualmente")
+        enviar_botones()
 
     elif data == "saldo":
-        query.edit_message_text(
-            f"💰 Capital: {capital:.2f} USDT\n"
-            f"📊 Posición: {posicion}"
+        bot.send_message(
+            TELEGRAM_ADMIN_ID,
+            f"💰 Capital: {capital:.2f} USDT\n📊 Posición: {posicion}"
         )
+        enviar_botones()
+# 🔥 AHORA SÍ: conectar handler
+dispatcher.add_handler(CallbackQueryHandler(manejar_botones))        
 
-dispatcher.add_handler(CallbackQueryHandler(manejar_botones))
+# =========================
+# 🚀 INICIAR BOT TELEGRAM
+# =========================
+def iniciar_bot_telegram():
+    def run():
+        offset = None
+        while True:
+            try:
+                updates = bot.get_updates(offset=offset, timeout=10)
+                for update in updates:
+                    dispatcher.process_update(update)
+                    offset = update.update_id + 1
+            except Exception as e:
+                print("Error Telegram:", e)
+                time.sleep(2)
+
+    threading.Thread(target=run, daemon=True).start()
 
 # =========================
 # EMA / SMA
@@ -435,6 +457,8 @@ if __name__ == "__main__":
     sincronizar_trend()
 
     enviar_botones()
+
+    iniciar_bot_telegram()  # 🔥 ESTA LÍNEA ES LA CLAVE
 
     websocket.WebSocketApp(
         f"wss://fstream.binance.com/ws/{SYMBOL}@kline_{INTERVAL}",
