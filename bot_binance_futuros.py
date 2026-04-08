@@ -30,7 +30,7 @@ def iniciar_web():
 # CONFIG
 # =========================
 SYMBOL = "adausdt"
-INTERVAL = "5m"
+INTERVAL = "1m"
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -230,7 +230,7 @@ def obtener_ultima_senal_real():
 
     haC = [(ohlc4[i]+haOpen[i]+max(high[i],haOpen[i])+min(low[i],haOpen[i]))/4 for i in range(len(close))]
 
-    L = 38
+    L = 49
 
     EMA1=ema(haC,L)
     EMA2=ema(EMA1,L)
@@ -319,7 +319,7 @@ def calcular_senal():
 
     haC=[(ohlc4[i]+haOpen[i]+max(high[i],haOpen[i])+min(low[i],haOpen[i]))/4 for i in range(len(close))]
 
-    L=38
+    L= 49
 
     EMA1=ema(haC,L)
     EMA2=ema(EMA1,L)
