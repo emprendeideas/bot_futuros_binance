@@ -22,7 +22,8 @@ def run_web():
     app.run(host="0.0.0.0", port=port)
 
 def iniciar_web():
-    threading.Thread(target=run_web, daemon=True).start()
+    t = threading.Thread(target=run_web)
+    t.start()
 
 # =========================
 # CONFIG
@@ -442,34 +443,25 @@ def on_message(ws, message):
     ejecutar_trade(señal, ultimo_precio)
 
 # =========================
-# 🚀 BOT EN THREAD (FIX)
+# MAIN (AJUSTADO SOLO CONEXIÓN)
 # =========================
-def iniciar_bot():
+if __name__ == "__main__":
     print("🚀 BOT PERFECTO ACTIVADO", flush=True)
 
-    enviar_telegram("🤖 BOT PERFECTO ACTIVADO")
+    iniciar_web()  # 🔥 primero como tu bot bueno
 
-    cargar_historico()
-    sincronizar_trend()
+    def run_bot():
+        enviar_telegram("🤖 BOT PERFECTO ACTIVADO")
 
-    enviar_botones()
-    iniciar_bot_telegram()
+        cargar_historico()
+        sincronizar_trend()
 
-    websocket.WebSocketApp(
-        f"wss://fstream.binance.com/ws/{SYMBOL}@kline_{INTERVAL}",
-        on_message=on_message
-    ).run_forever()
+        enviar_botones()
+        iniciar_bot_telegram()
 
-# =========================
-# MAIN (ESTABLE)
-# =========================
-def main():
-    iniciar_web()  # 🔥 primero SIEMPRE
+        websocket.WebSocketApp(
+            f"wss://fstream.binance.com/ws/{SYMBOL}@kline_{INTERVAL}",
+            on_message=on_message
+        ).run_forever()
 
-    threading.Thread(target=iniciar_bot, daemon=True).start()
-
-    while True:
-        time.sleep(60)
-
-if __name__ == "__main__":
-    main()
+    threading.Thread(target=run_bot).start()
