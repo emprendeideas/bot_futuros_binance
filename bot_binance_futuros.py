@@ -13,7 +13,7 @@ from telegram.ext import Dispatcher, CallbackQueryHandler
 # =========================
 app = Flask(__name__)
 
-@app.route('/')
+@app.route('/', methods=['GET', 'HEAD'])
 def home():
     return "BOT ACTIVO 🚀", 200
 
@@ -72,7 +72,7 @@ def enviar_telegram(msg):
 # TELEGRAM BOT
 # =========================
 bot = Bot(token=TELEGRAM_TOKEN)
-dispatcher = Dispatcher(bot, None, workers=0)
+dispatcher = Dispatcher(bot, None, workers=1)
 
 def enviar_botones():
     keyboard = [
