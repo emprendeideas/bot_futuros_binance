@@ -56,7 +56,9 @@ ultimo_precio = 0
 bot_activo = True
 
 # 🔥 CONTROL PORCENTAJE
-nivel_actual = 20
+nivel_actual = 1
+
+EMA_LENGTH = 15
 
 # =========================
 # TELEGRAM SIMPLE
@@ -283,7 +285,7 @@ def obtener_ultima_senal_real():
 
     haC = [(ohlc4[i]+haOpen[i]+max(high[i],haOpen[i])+min(low[i],haOpen[i]))/4 for i in range(len(close))]
 
-    L = 49
+    L = EMA_LENGTH
 
     EMA1=ema(haC,L)
     EMA2=ema(EMA1,L)
@@ -372,7 +374,7 @@ def calcular_senal():
 
     haC=[(ohlc4[i]+haOpen[i]+max(high[i],haOpen[i])+min(low[i],haOpen[i]))/4 for i in range(len(close))]
 
-    L= 49
+    L= EMA_LENGTH
 
     EMA1=ema(haC,L)
     EMA2=ema(EMA1,L)
