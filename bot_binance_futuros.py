@@ -58,7 +58,7 @@ bot_activo = True
 # 🔥 CONTROL PORCENTAJE
 nivel_actual = 1
 
-EMA_LENGTH = 15
+EMA_LENGTH = 25
 
 # =========================
 # TELEGRAM SIMPLE
