@@ -39,7 +39,6 @@ klines = []
 trend = 0
 last_candle_time = None
 
-# 🔥 MEMORIA REAL
 ultima_senal_historica = None
 primera_senal_valida = False
 
@@ -47,6 +46,7 @@ primera_senal_valida = False
 # 💰 TRADING SIMULADO
 # =========================
 capital = 100.0
+capital_inicial = 100.0
 posicion = None
 entry_price = 0.0
 trades = 0
@@ -54,6 +54,9 @@ FEE = 0.0005
 ultimo_precio = 0
 
 bot_activo = True
+
+# 🔥 CONTROL PORCENTAJE
+nivel_actual = 20
 
 # =========================
 # TELEGRAM SIMPLE
@@ -89,6 +92,20 @@ def enviar_botones():
         reply_markup=reply_markup
     )
 
+# 🔥 BOTONES NUEVOS CONTROL GANANCIA
+def enviar_control_ganancia():
+    keyboard = [
+        [InlineKeyboardButton("✅ Continuar", callback_data="continue_profit"),
+         InlineKeyboardButton("🛑 Parar", callback_data="stop_profit")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    bot.send_message(
+        chat_id=TELEGRAM_ADMIN_ID,
+        text="📊 Se alcanzó el objetivo mensual.\n¿Desea continuar operando?",
+        reply_markup=reply_markup
+    )
+
 # =========================
 # 🔥 CIERRE MANUAL
 # =========================
@@ -121,7 +138,7 @@ def cerrar_manual():
 # BOTONES
 # =========================
 def manejar_botones(update: Update, context):
-    global bot_activo
+    global bot_activo, nivel_actual
 
     query = update.callback_query
     query.answer()
@@ -150,6 +167,26 @@ def manejar_botones(update: Update, context):
         )
         enviar_botones()
 
+    # 🔥 NUEVOS CONTROLES
+    elif data == "continue_profit":
+        nivel_actual += 1
+        bot.send_message(TELEGRAM_ADMIN_ID, "✅ Se continúa operando")
+
+    elif data == "stop_profit":
+        bot_activo = False
+
+        ganancia = ((capital - capital_inicial) / capital_inicial) * 100
+
+        enviar_telegram(
+            f"🏁 OPERACIONES FINALIZADAS DEL MES\n\n"
+            f"📊 Ganancia total: {ganancia:.2f}%\n"
+            f"💰 Capital final: {capital:.2f} USDT\n"
+            f"🤖 Total trades: {trades}\n\n"
+            f"🎉 ¡Excelente trabajo! Seguimos creciendo 🚀"
+        )
+
+        bot.send_message(TELEGRAM_ADMIN_ID, "🛑 Bot detenido")
+
 dispatcher.add_handler(CallbackQueryHandler(manejar_botones))        
 
 # =========================
@@ -169,6 +206,23 @@ def iniciar_bot_telegram():
                 time.sleep(2)
 
     threading.Thread(target=run, daemon=True).start()
+
+# =========================
+# 🔥 CONTROL GANANCIA
+# =========================
+def verificar_ganancia():
+    global nivel_actual
+
+    ganancia = ((capital - capital_inicial) / capital_inicial) * 100
+
+    if ganancia >= nivel_actual:
+        enviar_telegram(
+            f"🎯 ¡Objetivo alcanzado!\n\n"
+            f"📈 Se llegó al +{nivel_actual}% de ganancia mensual 🚀\n"
+            f"🔥 Seguimos creciendo día a día!"
+        )
+
+        enviar_control_ganancia()
 
 # =========================
 # EMA / SMA
@@ -392,6 +446,8 @@ def ejecutar_trade(señal, precio):
         f"💰 Precio: {precio}\n"
         f"💼 Capital: {capital:.2f} USDT"
     )
+
+    verificar_ganancia()
 
 # =========================
 # WEBSOCKET
