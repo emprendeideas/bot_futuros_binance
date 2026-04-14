@@ -29,7 +29,7 @@ def iniciar_web():
 # CONFIG
 # =========================
 SYMBOL = "adausdt"
-INTERVAL = "5m"
+INTERVAL = "1m"
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -59,7 +59,7 @@ detener_bot_total = False  # 🔥 NUEVO
 # 🔥 CONTROL PORCENTAJE
 nivel_actual = 1
 
-EMA_LENGTH = 20
+EMA_LENGTH = 14
 
 # =========================
 # TELEGRAM SIMPLE
