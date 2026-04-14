@@ -29,7 +29,7 @@ def iniciar_web():
 # CONFIG
 # =========================
 SYMBOL = "adausdt"
-INTERVAL = "1m"
+INTERVAL = "5m"
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -54,11 +54,12 @@ FEE = 0.0005
 ultimo_precio = 0
 
 bot_activo = True
+detener_bot_total = False  # 🔥 NUEVO
 
 # 🔥 CONTROL PORCENTAJE
 nivel_actual = 1
 
-EMA_LENGTH = 25
+EMA_LENGTH = 20
 
 # =========================
 # TELEGRAM SIMPLE
@@ -70,8 +71,8 @@ def enviar_telegram(msg):
             data={"chat_id": TELEGRAM_CHAT_ID, "text": msg},
             timeout=3
         )
-    except:
-        pass
+    except Exception as e:
+        print("ERROR TELEGRAM:", e)
 
 # =========================
 # TELEGRAM BOT
@@ -127,6 +128,8 @@ def cerrar_manual():
 
     trades += 1
 
+    verificar_ganancia()  # 🔥 NUEVO
+
     enviar_telegram(
         f"🧑‍💻 CIERRE MANUAL {posicion}\n"
         f"💰 Capital: {capital:.2f} USDT\n"
@@ -140,7 +143,7 @@ def cerrar_manual():
 # BOTONES
 # =========================
 def manejar_botones(update: Update, context):
-    global bot_activo, nivel_actual
+    global bot_activo, nivel_actual, detener_bot_total
 
     query = update.callback_query
     query.answer()
@@ -169,13 +172,12 @@ def manejar_botones(update: Update, context):
         )
         enviar_botones()
 
-    # 🔥 NUEVOS CONTROLES
     elif data == "continue_profit":
-        nivel_actual += 1
         bot.send_message(TELEGRAM_ADMIN_ID, "✅ Se continúa operando")
 
     elif data == "stop_profit":
         bot_activo = False
+        detener_bot_total = True
 
         ganancia = ((capital - capital_inicial) / capital_inicial) * 100
 
@@ -184,10 +186,13 @@ def manejar_botones(update: Update, context):
             f"📊 Ganancia total: {ganancia:.2f}%\n"
             f"💰 Capital final: {capital:.2f} USDT\n"
             f"🤖 Total trades: {trades}\n\n"
-            f"🎉 ¡Excelente trabajo! Seguimos creciendo 🚀"
+            f"🎯 Meta alcanzada con disciplina y control.\n"
+            f"🚀 Este mes cerramos en positivo.\n\n"
+            f"💡 Próximo mes, vamos por más.\n"
+            f"🔥 La consistencia es la clave del éxito."
         )
 
-        bot.send_message(TELEGRAM_ADMIN_ID, "🛑 Bot detenido")
+        bot.send_message(TELEGRAM_ADMIN_ID, "🛑 Bot detenido completamente")
 
 dispatcher.add_handler(CallbackQueryHandler(manejar_botones))        
 
@@ -217,10 +222,16 @@ def verificar_ganancia():
 
     ganancia = ((capital - capital_inicial) / capital_inicial) * 100
 
+    print(f"[DEBUG] Ganancia actual: {ganancia:.2f}% | Nivel: {nivel_actual}")
+
     if ganancia >= nivel_actual:
+        nivel_detectado = nivel_actual
+        nivel_actual += 1
+
         enviar_telegram(
             f"🎯 ¡Objetivo alcanzado!\n\n"
-            f"📈 Se llegó al +{nivel_actual}% de ganancia mensual 🚀\n"
+            f"📈 Se llegó al +{nivel_detectado}% de ganancia mensual 🚀\n"
+            f"💰 Ganancia actual: {ganancia:.2f}%\n"
             f"🔥 Seguimos creciendo día a día!"
         )
 
@@ -432,6 +443,8 @@ def ejecutar_trade(señal, precio):
 
         trades += 1
 
+        verificar_ganancia()  # 🔥 CLAVE
+
         enviar_telegram(
             f"❌ CIERRE {posicion}\n"
             f"💰 Capital: {capital:.2f} USDT\n"
@@ -455,7 +468,10 @@ def ejecutar_trade(señal, precio):
 # WEBSOCKET
 # =========================
 def on_message(ws, message):
-    global klines, last_candle_time, primera_senal_valida, ultimo_precio
+    global klines, last_candle_time, primera_senal_valida, ultimo_precio, detener_bot_total
+
+    if detener_bot_total:
+        return
 
     data=json.loads(message)
     k=data['k']
@@ -501,12 +517,12 @@ def on_message(ws, message):
     ejecutar_trade(señal, ultimo_precio)
 
 # =========================
-# MAIN (AJUSTADO SOLO CONEXIÓN)
+# MAIN
 # =========================
 if __name__ == "__main__":
     print("🚀 BOT PERFECTO ACTIVADO", flush=True)
 
-    iniciar_web()  # 🔥 primero como tu bot bueno
+    iniciar_web()
 
     def run_bot():
         enviar_telegram("🤖 BOT PERFECTO ACTIVADO")
