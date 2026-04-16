@@ -59,7 +59,7 @@ detener_bot_total = False  # 🔥 NUEVO
 # 🔥 CONTROL PORCENTAJE
 nivel_actual = 1
 
-EMA_LENGTH = 14
+EMA_LENGTH = 16
 
 # =========================
 # TELEGRAM SIMPLE
