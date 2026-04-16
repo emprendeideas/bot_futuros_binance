@@ -54,9 +54,11 @@ FEE = 0.0005
 ultimo_precio = 0
 
 bot_activo = True
-detener_bot_total = False
+detener_bot_total = False  # 🔥 NUEVO
 
+# 🔥 CONTROL PORCENTAJE
 nivel_actual = 1
+
 EMA_LENGTH = 14
 
 # =========================
@@ -78,17 +80,6 @@ def enviar_telegram(msg):
 bot = Bot(token=TELEGRAM_TOKEN)
 dispatcher = Dispatcher(bot, None, workers=1)
 
-# 🔥 ENVÍO SEGURO (CLAVE)
-def safe_bot_send(chat_id, text, reply_markup=None):
-    try:
-        bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            reply_markup=reply_markup
-        )
-    except Exception as e:
-        print("ERROR BOT:", e)
-
 def enviar_botones():
     keyboard = [
         [InlineKeyboardButton("⏸️ Pausar", callback_data="pause"),
@@ -98,12 +89,13 @@ def enviar_botones():
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    safe_bot_send(
-        TELEGRAM_ADMIN_ID,
-        "⚙️ CONTROL DEL BOT",
-        reply_markup
+    bot.send_message(
+        chat_id=TELEGRAM_ADMIN_ID,
+        text="⚙️ CONTROL DEL BOT",
+        reply_markup=reply_markup
     )
 
+# 🔥 BOTONES NUEVOS CONTROL GANANCIA
 def enviar_control_ganancia():
     keyboard = [
         [InlineKeyboardButton("✅ Continuar", callback_data="continue_profit"),
@@ -111,10 +103,10 @@ def enviar_control_ganancia():
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    safe_bot_send(
-        TELEGRAM_ADMIN_ID,
-        "📊 Se alcanzó el objetivo mensual.\n¿Desea continuar operando?",
-        reply_markup
+    bot.send_message(
+        chat_id=TELEGRAM_ADMIN_ID,
+        text="📊 Se alcanzó el objetivo mensual.\n¿Desea continuar operando?",
+        reply_markup=reply_markup
     )
 
 # =========================
@@ -136,7 +128,7 @@ def cerrar_manual():
 
     trades += 1
 
-    verificar_ganancia()
+    verificar_ganancia()  # 🔥 NUEVO
 
     enviar_telegram(
         f"🧑‍💻 CIERRE MANUAL {posicion}\n"
@@ -160,28 +152,28 @@ def manejar_botones(update: Update, context):
 
     if data == "pause":
         bot_activo = False
-        safe_bot_send(TELEGRAM_ADMIN_ID, "⏸ Bot pausado")
+        bot.send_message(TELEGRAM_ADMIN_ID, "⏸ Bot pausado")
         enviar_botones()
 
     elif data == "resume":
         bot_activo = True
-        safe_bot_send(TELEGRAM_ADMIN_ID, "▶️ Bot reanudado")
+        bot.send_message(TELEGRAM_ADMIN_ID, "▶️ Bot reanudado")
         enviar_botones()
 
     elif data == "close":
         cerrar_manual()
-        safe_bot_send(TELEGRAM_ADMIN_ID, "🔴 Operación cerrada manualmente")
+        bot.send_message(TELEGRAM_ADMIN_ID, "🔴 Operación cerrada manualmente")
         enviar_botones()
 
     elif data == "saldo":
-        safe_bot_send(
+        bot.send_message(
             TELEGRAM_ADMIN_ID,
             f"💰 Capital: {capital:.2f} USDT\n📊 Posición: {posicion}"
         )
         enviar_botones()
 
     elif data == "continue_profit":
-        safe_bot_send(TELEGRAM_ADMIN_ID, "✅ Se continúa operando")
+        bot.send_message(TELEGRAM_ADMIN_ID, "✅ Se continúa operando")
 
     elif data == "stop_profit":
         bot_activo = False
@@ -200,12 +192,12 @@ def manejar_botones(update: Update, context):
             f"🔥 La consistencia es la clave del éxito."
         )
 
-        safe_bot_send(TELEGRAM_ADMIN_ID, "🛑 Bot detenido completamente")
+        bot.send_message(TELEGRAM_ADMIN_ID, "🛑 Bot detenido completamente")
 
-dispatcher.add_handler(CallbackQueryHandler(manejar_botones))
+dispatcher.add_handler(CallbackQueryHandler(manejar_botones))        
 
 # =========================
-# TELEGRAM LOOP
+# 🚀 INICIAR BOT TELEGRAM
 # =========================
 def iniciar_bot_telegram():
     def run():
@@ -223,31 +215,130 @@ def iniciar_bot_telegram():
     threading.Thread(target=run, daemon=True).start()
 
 # =========================
-# GANANCIA
+# 🔥 CONTROL GANANCIA
 # =========================
 def verificar_ganancia():
     global nivel_actual
 
-    try:
-        ganancia = ((capital - capital_inicial) / capital_inicial) * 100
+    ganancia = ((capital - capital_inicial) / capital_inicial) * 100
 
-        print(f"[DEBUG] Ganancia actual: {ganancia:.2f}% | Nivel: {nivel_actual}")
+    print(f"[DEBUG] Ganancia actual: {ganancia:.2f}% | Nivel: {nivel_actual}")
 
-        if ganancia >= nivel_actual:
-            nivel_detectado = nivel_actual
-            nivel_actual += 1
+    if ganancia >= nivel_actual:
+        nivel_detectado = nivel_actual
+        nivel_actual += 1
 
-            enviar_telegram(
-                f"🎯 ¡Objetivo alcanzado!\n\n"
-                f"📈 Se llegó al +{nivel_detectado}% de ganancia mensual 🚀\n"
-                f"💰 Ganancia actual: {ganancia:.2f}%\n"
-                f"🔥 Seguimos creciendo día a día!"
-            )
+        enviar_telegram(
+            f"🎯 ¡Objetivo alcanzado!\n\n"
+            f"📈 Se llegó al +{nivel_detectado}% de ganancia mensual 🚀\n"
+            f"💰 Ganancia actual: {ganancia:.2f}%\n"
+            f"🔥 Seguimos creciendo día a día!"
+        )
 
-            enviar_control_ganancia()
+        enviar_control_ganancia()
 
-    except Exception as e:
-        print("ERROR GANANCIA:", e)
+# =========================
+# EMA / SMA
+# =========================
+def ema(src, length):
+    ema_vals = []
+    k = 2 / (length + 1)
+    for i, v in enumerate(src):
+        ema_vals.append(v if i == 0 else v * k + ema_vals[i - 1] * (1 - k))
+    return ema_vals
+
+def sma(src, length):
+    return [
+        None if i < length - 1
+        else sum(src[i - length + 1:i + 1]) / length
+        for i in range(len(src))
+    ]
+
+# =========================
+# HISTÓRICO
+# =========================
+def cargar_historico():
+    global klines, last_candle_time
+
+    data = requests.get(
+        f"https://fapi.binance.com/fapi/v1/klines?symbol={SYMBOL.upper()}&interval={INTERVAL}&limit=500"
+    ).json()
+
+    klines = [{
+        "open": float(k[1]),
+        "high": float(k[2]),
+        "low": float(k[3]),
+        "close": float(k[4]),
+        "time": k[6]
+    } for k in data]
+
+    last_candle_time = klines[-1]["time"]
+
+# =========================
+# 🔥 ÚLTIMA SEÑAL REAL
+# =========================
+def obtener_ultima_senal_real():
+    global trend
+
+    if len(klines) < 100:
+        return None
+
+    close = [k["close"] for k in klines]
+    open_ = [k["open"] for k in klines]
+    high = [k["high"] for k in klines]
+    low = [k["low"] for k in klines]
+
+    ohlc4 = [(o+h+l+c)/4 for o,h,l,c in zip(open_,high,low,close)]
+
+    haOpen = [ohlc4[0]/2]
+    for i in range(1,len(ohlc4)):
+        haOpen.append((ohlc4[i]+haOpen[i-1])/2)
+
+    haC = [(ohlc4[i]+haOpen[i]+max(high[i],haOpen[i])+min(low[i],haOpen[i]))/4 for i in range(len(close))]
+
+    L = EMA_LENGTH
+
+    EMA1=ema(haC,L)
+    EMA2=ema(EMA1,L)
+    EMA3=ema(EMA2,L)
+    TMA1=[3*EMA1[i]-3*EMA2[i]+EMA3[i] for i in range(len(close))]
+
+    EMA4=ema(TMA1,L)
+    EMA5=ema(EMA4,L)
+    EMA6=ema(EMA5,L)
+    TMA2=[3*EMA4[i]-3*EMA5[i]+EMA6[i] for i in range(len(close))]
+
+    mavi=TMA1
+    kirmizi=TMA2
+
+    dist=[abs(mavi[j]-kirmizi[j]) for j in range(len(mavi))]
+    dist_media=sma(dist,30)
+
+    ultima=None
+    temp_trend=0
+
+    for i in range(1,len(close)):
+        if dist_media[i] is None:
+            continue
+
+        cruce_up = mavi[i]>kirmizi[i] and mavi[i-1]<=kirmizi[i-1]
+        cruce_down = mavi[i]<kirmizi[i] and mavi[i-1]>=kirmizi[i-1]
+
+        confirm_up = mavi[i]>mavi[i-1]
+        confirm_down = mavi[i]<mavi[i-1]
+
+        filtro = dist[i]>dist_media[i]*0.3
+
+        if cruce_up and confirm_up and filtro and temp_trend!=1:
+            temp_trend=1
+            ultima="BUY"
+
+        elif cruce_down and confirm_down and filtro and temp_trend!=-1:
+            temp_trend=-1
+            ultima="SELL"
+
+    trend = temp_trend
+    return ultima
 
 # =========================
 # SINCRONIZACIÓN
@@ -267,13 +358,10 @@ def sincronizar_trend():
         ultima_txt = "None"
         esperar = "BUY 🔼 / SELL 🔽"
 
-    mensaje = (
+    enviar_telegram(
         f"📌 Última señal detectada: {ultima_txt}\n"
         f"⏳ Esperando señal {esperar} para operar..."
     )
-
-    enviar_telegram(mensaje)
-    safe_bot_send(TELEGRAM_ADMIN_ID, mensaje)
 
 # =========================
 # SEÑALES TIEMPO REAL
