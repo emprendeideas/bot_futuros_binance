@@ -33,13 +33,7 @@ INTERVAL = "1m"
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-
-try:
-    TELEGRAM_ADMIN_ID = int(os.getenv("TELEGRAM_ADMIN_ID"))
-except:
-    TELEGRAM_ADMIN_ID = None
-
-print("ADMIN ID:", TELEGRAM_ADMIN_ID)
+TELEGRAM_ADMIN_ID = int(os.getenv("TELEGRAM_ADMIN_ID"))
 
 klines = []
 trend = 0
@@ -79,56 +73,49 @@ def enviar_telegram(msg):
         print("ERROR TELEGRAM:", e)
 
 # =========================
-# TELEGRAM BOT SEGURO
+# TELEGRAM BOT
 # =========================
 bot = Bot(token=TELEGRAM_TOKEN)
 dispatcher = Dispatcher(bot, None, workers=1)
 
-def safe_send_bot(chat_id, text, reply_markup=None):
+# 🔥 ENVÍO SEGURO (CLAVE)
+def safe_bot_send(chat_id, text, reply_markup=None):
     try:
-        if chat_id is None:
-            print("⚠️ ADMIN_ID inválido")
-            return
-
         bot.send_message(
             chat_id=chat_id,
             text=text,
             reply_markup=reply_markup
         )
     except Exception as e:
-        print("❌ ERROR BOT:", e)
+        print("ERROR BOT:", e)
 
 def enviar_botones():
-    try:
-        keyboard = [
-            [InlineKeyboardButton("⏸️ Pausar", callback_data="pause"),
-             InlineKeyboardButton("▶️ Reanudar", callback_data="resume")],
-            [InlineKeyboardButton("🔴 Cerrar operación", callback_data="close")],
-            [InlineKeyboardButton("💰 Saldo", callback_data="saldo")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+    keyboard = [
+        [InlineKeyboardButton("⏸️ Pausar", callback_data="pause"),
+         InlineKeyboardButton("▶️ Reanudar", callback_data="resume")],
+        [InlineKeyboardButton("🔴 Cerrar operación", callback_data="close")],
+        [InlineKeyboardButton("💰 Saldo", callback_data="saldo")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-        safe_send_bot(TELEGRAM_ADMIN_ID, "⚙️ CONTROL DEL BOT", reply_markup)
-
-    except Exception as e:
-        print("ERROR BOTONES:", e)
+    safe_bot_send(
+        TELEGRAM_ADMIN_ID,
+        "⚙️ CONTROL DEL BOT",
+        reply_markup
+    )
 
 def enviar_control_ganancia():
-    try:
-        keyboard = [
-            [InlineKeyboardButton("✅ Continuar", callback_data="continue_profit"),
-             InlineKeyboardButton("🛑 Parar", callback_data="stop_profit")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+    keyboard = [
+        [InlineKeyboardButton("✅ Continuar", callback_data="continue_profit"),
+         InlineKeyboardButton("🛑 Parar", callback_data="stop_profit")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-        safe_send_bot(
-            TELEGRAM_ADMIN_ID,
-            "📊 Se alcanzó el objetivo mensual.\n¿Desea continuar operando?",
-            reply_markup
-        )
-
-    except Exception as e:
-        print("ERROR CONTROL GANANCIA:", e)
+    safe_bot_send(
+        TELEGRAM_ADMIN_ID,
+        "📊 Se alcanzó el objetivo mensual.\n¿Desea continuar operando?",
+        reply_markup
+    )
 
 # =========================
 # 🔥 CIERRE MANUAL
@@ -173,28 +160,28 @@ def manejar_botones(update: Update, context):
 
     if data == "pause":
         bot_activo = False
-        safe_send_bot(TELEGRAM_ADMIN_ID, "⏸ Bot pausado")
+        safe_bot_send(TELEGRAM_ADMIN_ID, "⏸ Bot pausado")
         enviar_botones()
 
     elif data == "resume":
         bot_activo = True
-        safe_send_bot(TELEGRAM_ADMIN_ID, "▶️ Bot reanudado")
+        safe_bot_send(TELEGRAM_ADMIN_ID, "▶️ Bot reanudado")
         enviar_botones()
 
     elif data == "close":
         cerrar_manual()
-        safe_send_bot(TELEGRAM_ADMIN_ID, "🔴 Operación cerrada manualmente")
+        safe_bot_send(TELEGRAM_ADMIN_ID, "🔴 Operación cerrada manualmente")
         enviar_botones()
 
     elif data == "saldo":
-        safe_send_bot(
+        safe_bot_send(
             TELEGRAM_ADMIN_ID,
             f"💰 Capital: {capital:.2f} USDT\n📊 Posición: {posicion}"
         )
         enviar_botones()
 
     elif data == "continue_profit":
-        safe_send_bot(TELEGRAM_ADMIN_ID, "✅ Se continúa operando")
+        safe_bot_send(TELEGRAM_ADMIN_ID, "✅ Se continúa operando")
 
     elif data == "stop_profit":
         bot_activo = False
@@ -206,10 +193,14 @@ def manejar_botones(update: Update, context):
             f"🏁 OPERACIONES FINALIZADAS DEL MES\n\n"
             f"📊 Ganancia total: {ganancia:.2f}%\n"
             f"💰 Capital final: {capital:.2f} USDT\n"
-            f"🤖 Total trades: {trades}"
+            f"🤖 Total trades: {trades}\n\n"
+            f"🎯 Meta alcanzada con disciplina y control.\n"
+            f"🚀 Este mes cerramos en positivo.\n\n"
+            f"💡 Próximo mes, vamos por más.\n"
+            f"🔥 La consistencia es la clave del éxito."
         )
 
-        safe_send_bot(TELEGRAM_ADMIN_ID, "🛑 Bot detenido completamente")
+        safe_bot_send(TELEGRAM_ADMIN_ID, "🛑 Bot detenido completamente")
 
 dispatcher.add_handler(CallbackQueryHandler(manejar_botones))
 
@@ -222,13 +213,11 @@ def iniciar_bot_telegram():
         while True:
             try:
                 updates = bot.get_updates(offset=offset, timeout=10)
-
                 for update in updates:
                     dispatcher.process_update(update)
                     offset = update.update_id + 1
-
             except Exception as e:
-                print("Error Telegram Loop:", e)
+                print("Error Telegram:", e)
                 time.sleep(2)
 
     threading.Thread(target=run, daemon=True).start()
@@ -242,18 +231,17 @@ def verificar_ganancia():
     try:
         ganancia = ((capital - capital_inicial) / capital_inicial) * 100
 
-        print(f"[DEBUG] Ganancia: {ganancia:.2f}% | Nivel: {nivel_actual}")
+        print(f"[DEBUG] Ganancia actual: {ganancia:.2f}% | Nivel: {nivel_actual}")
 
         if ganancia >= nivel_actual:
-            print("🔥 NIVEL ALCANZADO")
-
             nivel_detectado = nivel_actual
             nivel_actual += 1
 
             enviar_telegram(
                 f"🎯 ¡Objetivo alcanzado!\n\n"
-                f"📈 +{nivel_detectado}% logrado\n"
-                f"💰 Actual: {ganancia:.2f}%"
+                f"📈 Se llegó al +{nivel_detectado}% de ganancia mensual 🚀\n"
+                f"💰 Ganancia actual: {ganancia:.2f}%\n"
+                f"🔥 Seguimos creciendo día a día!"
             )
 
             enviar_control_ganancia()
@@ -262,60 +250,183 @@ def verificar_ganancia():
         print("ERROR GANANCIA:", e)
 
 # =========================
+# SINCRONIZACIÓN
+# =========================
+def sincronizar_trend():
+    global ultima_senal_historica
+
+    ultima_senal_historica = obtener_ultima_senal_real()
+
+    if ultima_senal_historica == "BUY":
+        ultima_txt = "BUY 🔼"
+        esperar = "SELL 🔽"
+    elif ultima_senal_historica == "SELL":
+        ultima_txt = "SELL 🔽"
+        esperar = "BUY 🔼"
+    else:
+        ultima_txt = "None"
+        esperar = "BUY 🔼 / SELL 🔽"
+
+    mensaje = (
+        f"📌 Última señal detectada: {ultima_txt}\n"
+        f"⏳ Esperando señal {esperar} para operar..."
+    )
+
+    enviar_telegram(mensaje)
+    safe_bot_send(TELEGRAM_ADMIN_ID, mensaje)
+
+# =========================
+# SEÑALES TIEMPO REAL
+# =========================
+def calcular_senal():
+    global trend
+
+    if len(klines) < 100:
+        return None
+
+    close = [k["close"] for k in klines]
+    open_ = [k["open"] for k in klines]
+    high = [k["high"] for k in klines]
+    low = [k["low"] for k in klines]
+
+    ohlc4 = [(o+h+l+c)/4 for o,h,l,c in zip(open_,high,low,close)]
+
+    haOpen=[ohlc4[0]/2]
+    for i in range(1,len(ohlc4)):
+        haOpen.append((ohlc4[i]+haOpen[i-1])/2)
+
+    haC=[(ohlc4[i]+haOpen[i]+max(high[i],haOpen[i])+min(low[i],haOpen[i]))/4 for i in range(len(close))]
+
+    L= EMA_LENGTH
+
+    EMA1=ema(haC,L)
+    EMA2=ema(EMA1,L)
+    EMA3=ema(EMA2,L)
+    TMA1=[3*EMA1[i]-3*EMA2[i]+EMA3[i] for i in range(len(close))]
+
+    EMA4=ema(TMA1,L)
+    EMA5=ema(EMA4,L)
+    EMA6=ema(EMA5,L)
+    TMA2=[3*EMA4[i]-3*EMA5[i]+EMA6[i] for i in range(len(close))]
+
+    mavi=TMA1
+    kirmizi=TMA2
+
+    i=-1
+
+    cruce_up = mavi[i]>kirmizi[i] and mavi[i-1]<=kirmizi[i-1]
+    cruce_down = mavi[i]<kirmizi[i] and mavi[i-1]>=kirmizi[i-1]
+
+    confirm_up = mavi[i]>mavi[i-1]
+    confirm_down = mavi[i]<mavi[i-1]
+
+    dist=[abs(mavi[j]-kirmizi[j]) for j in range(len(mavi))]
+    dist_media=sma(dist,30)
+
+    if dist_media[i] is None:
+        return None
+
+    filtro = dist[i]>dist_media[i]*0.3
+
+    if cruce_up and confirm_up and filtro and trend!=1:
+        trend=1
+        return "BUY"
+
+    if cruce_down and confirm_down and filtro and trend!=-1:
+        trend=-1
+        return "SELL"
+
+    return None
+
+# =========================
+# TRADING
+# =========================
+def ejecutar_trade(señal, precio):
+    global capital, posicion, entry_price, trades
+
+    if posicion is not None:
+        if posicion == "BUY":
+            pnl = (precio - entry_price) / entry_price
+        else:
+            pnl = (entry_price - precio) / entry_price
+
+        capital *= (1 + pnl)
+        capital *= (1 - FEE)
+
+        trades += 1
+
+        verificar_ganancia()  # 🔥 CLAVE
+
+        enviar_telegram(
+            f"❌ CIERRE {posicion}\n"
+            f"💰 Capital: {capital:.2f} USDT\n"
+            f"📊 PnL: {pnl*100:.2f}%\n"
+            f"🤖 Trades: {trades}"
+        )
+
+    posicion = señal
+    entry_price = precio
+    capital *= (1 - FEE)
+
+    enviar_telegram(
+        f"🚀 APERTURA {señal}\n"
+        f"💰 Precio: {precio}\n"
+        f"💼 Capital: {capital:.2f} USDT"
+    )
+
+    verificar_ganancia()
+
+# =========================
 # WEBSOCKET
 # =========================
 def on_message(ws, message):
     global klines, last_candle_time, primera_senal_valida, ultimo_precio, detener_bot_total
 
-    try:
-        if detener_bot_total:
+    if detener_bot_total:
+        return
+
+    data=json.loads(message)
+    k=data['k']
+
+    if not k["x"]:
+        return
+
+    candle_time=k["T"]
+
+    if candle_time <= last_candle_time:
+        return
+
+    last_candle_time=candle_time
+
+    candle={
+        "open":float(k["o"]),
+        "high":float(k["h"]),
+        "low":float(k["l"]),
+        "close":float(k["c"]),
+        "time":candle_time
+    }
+
+    ultimo_precio = candle["close"]
+
+    klines.append(candle)
+    if len(klines)>500:
+        klines.pop(0)
+
+    if not bot_activo:
+        return
+
+    señal=calcular_senal()
+
+    if not señal:
+        return
+
+    if not primera_senal_valida:
+        if señal != ultima_senal_historica:
+            primera_senal_valida = True
+        else:
             return
 
-        data = json.loads(message)
-        k = data['k']
-
-        if not k["x"]:
-            return
-
-        candle_time = k["T"]
-
-        if candle_time <= last_candle_time:
-            return
-
-        last_candle_time = candle_time
-
-        candle = {
-            "open": float(k["o"]),
-            "high": float(k["h"]),
-            "low": float(k["l"]),
-            "close": float(k["c"]),
-            "time": candle_time
-        }
-
-        ultimo_precio = candle["close"]
-
-        klines.append(candle)
-        if len(klines) > 500:
-            klines.pop(0)
-
-        if not bot_activo:
-            return
-
-        señal = calcular_senal()
-
-        if not señal:
-            return
-
-        if not primera_senal_valida:
-            if señal != ultima_senal_historica:
-                primera_senal_valida = True
-            else:
-                return
-
-        ejecutar_trade(señal, ultimo_precio)
-
-    except Exception as e:
-        print("ERROR WEBSOCKET:", e)
+    ejecutar_trade(señal, ultimo_precio)
 
 # =========================
 # MAIN
