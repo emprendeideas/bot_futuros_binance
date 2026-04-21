@@ -54,12 +54,47 @@ FEE = 0.0005
 ultimo_precio = 0
 
 bot_activo = True
-detener_bot_total = False  # 🔥 NUEVO
+detener_bot_total = False
 
-# 🔥 CONTROL PORCENTAJE
 nivel_actual = 1
 
 EMA_LENGTH = 16
+
+# =========================
+# 🧠 FILTRO INTELIGENTE (NUEVO)
+# =========================
+last_valid_trend = 0
+last_entry_price = None
+last_entry_type = 0
+
+def filtro_inteligente(señal, precio):
+    global last_valid_trend, last_entry_price, last_entry_type
+
+    nueva_senal = 1 if señal == "BUY" else -1
+
+    pnl_temp = None
+
+    if last_entry_price is not None:
+        if last_entry_type == 1:
+            pnl_temp = (precio - last_entry_price) / last_entry_price * 100
+        else:
+            pnl_temp = (last_entry_price - precio) / last_entry_price * 100
+
+    es_contraria = (last_valid_trend == 0) or (nueva_senal != last_valid_trend)
+
+    en_rango = (
+        pnl_temp is not None and
+        pnl_temp <= -0.01 and
+        pnl_temp >= -0.49
+    )
+
+    if es_contraria and not en_rango:
+        last_valid_trend = nueva_senal
+        last_entry_price = precio
+        last_entry_type = nueva_senal
+        return True
+
+    return False
 
 # =========================
 # TELEGRAM SIMPLE
@@ -95,7 +130,6 @@ def enviar_botones():
         reply_markup=reply_markup
     )
 
-# 🔥 BOTONES NUEVOS CONTROL GANANCIA
 def enviar_control_ganancia():
     keyboard = [
         [InlineKeyboardButton("✅ Continuar", callback_data="continue_profit"),
@@ -110,7 +144,7 @@ def enviar_control_ganancia():
     )
 
 # =========================
-# 🔥 CIERRE MANUAL
+# CIERRE MANUAL
 # =========================
 def cerrar_manual():
     global capital, posicion, entry_price, trades
@@ -128,7 +162,7 @@ def cerrar_manual():
 
     trades += 1
 
-    verificar_ganancia()  # 🔥 NUEVO
+    verificar_ganancia()
 
     enviar_telegram(
         f"🧑‍💻 CIERRE MANUAL {posicion}\n"
@@ -185,19 +219,13 @@ def manejar_botones(update: Update, context):
             f"🏁 OPERACIONES FINALIZADAS DEL MES\n\n"
             f"📊 Ganancia total: {ganancia:.2f}%\n"
             f"💰 Capital final: {capital:.2f} USDT\n"
-            f"🤖 Total trades: {trades}\n\n"
-            f"🎯 Meta alcanzada con disciplina y control.\n"
-            f"🚀 Este mes cerramos en positivo.\n\n"
-            f"💡 Próximo mes, vamos por más.\n"
-            f"🔥 La consistencia es la clave del éxito."
+            f"🤖 Total trades: {trades}"
         )
-
-        bot.send_message(TELEGRAM_ADMIN_ID, "🛑 Bot detenido completamente")
 
 dispatcher.add_handler(CallbackQueryHandler(manejar_botones))        
 
 # =========================
-# 🚀 INICIAR BOT TELEGRAM
+# INICIAR TELEGRAM
 # =========================
 def iniciar_bot_telegram():
     def run():
@@ -364,7 +392,7 @@ def sincronizar_trend():
     )
 
 # =========================
-# SEÑALES TIEMPO REAL
+# SEÑAL
 # =========================
 def calcular_senal():
     global trend
@@ -443,7 +471,7 @@ def ejecutar_trade(señal, precio):
 
         trades += 1
 
-        verificar_ganancia()  # 🔥 CLAVE
+        verificar_ganancia()
 
         enviar_telegram(
             f"❌ CIERRE {posicion}\n"
@@ -514,18 +542,22 @@ def on_message(ws, message):
         else:
             return
 
+    # 🔥 APLICACIÓN DEL FILTRO
+    if not filtro_inteligente(señal, ultimo_precio):
+        return
+
     ejecutar_trade(señal, ultimo_precio)
 
 # =========================
 # MAIN
 # =========================
 if __name__ == "__main__":
-    print("🚀 BOT PERFECTO ACTIVADO", flush=True)
+    print("🚀 BOT PERFECTO + FILTRO ACTIVADO", flush=True)
 
     iniciar_web()
 
     def run_bot():
-        enviar_telegram("🤖 BOT PERFECTO ACTIVADO")
+        enviar_telegram("🤖 BOT CON FILTRO INTELIGENTE ACTIVADO")
 
         cargar_historico()
         sincronizar_trend()
