@@ -474,7 +474,7 @@ def ejecutar_trade(señal, precio):
         verificar_ganancia()
 
         enviar_telegram(
-            f"🔴 CIERRE {posicion}\n"
+            f"❌ CIERRE {posicion}\n"
             f"💰 Capital: {capital:.2f} USDT\n"
             f"📊 PnL: {pnl*100:.2f}%\n"
             f"🤖 Trades: {trades}"
@@ -485,7 +485,7 @@ def ejecutar_trade(señal, precio):
     capital *= (1 - FEE)
 
     enviar_telegram(
-        f"🟢 APERTURA {señal}\n"
+        f"🚀 APERTURA {señal}\n"
         f"💰 Precio: {precio}\n"
         f"💼 Capital: {capital:.2f} USDT"
     )
