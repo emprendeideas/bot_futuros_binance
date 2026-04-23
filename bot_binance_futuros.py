@@ -542,7 +542,7 @@ def on_message(ws, message):
 
     # 🔥 APLICACIÓN DEL FILTRO
     if not filtro_inteligente(señal, ultimo_precio):
-    return
+        return
 
     # 🔥 AHORA SÍ actualizamos trend (igual que Pine)
     if señal == "BUY":
