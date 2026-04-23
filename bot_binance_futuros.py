@@ -58,7 +58,7 @@ detener_bot_total = False
 
 nivel_actual = 1
 
-EMA_LENGTH = 16
+EMA_LENGTH = 2
 
 # =========================
 # 🧠 FILTRO INTELIGENTE (NUEVO)
