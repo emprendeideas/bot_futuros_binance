@@ -445,11 +445,9 @@ def calcular_senal():
     filtro = dist[i]>dist_media[i]*0.3
 
     if cruce_up and confirm_up and filtro and trend!=1:
-        trend=1
         return "BUY"
 
     if cruce_down and confirm_down and filtro and trend!=-1:
-        trend=-1
         return "SELL"
 
     return None
@@ -544,7 +542,13 @@ def on_message(ws, message):
 
     # 🔥 APLICACIÓN DEL FILTRO
     if not filtro_inteligente(señal, ultimo_precio):
-        return
+    return
+
+    # 🔥 AHORA SÍ actualizamos trend (igual que Pine)
+    if señal == "BUY":
+        trend = 1
+    else:
+        trend = -1
 
     ejecutar_trade(señal, ultimo_precio)
 
