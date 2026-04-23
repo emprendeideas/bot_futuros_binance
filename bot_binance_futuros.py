@@ -21,6 +21,10 @@ def run_web():
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
+def iniciar_web():
+    t = threading.Thread(target=run_web)
+    t.start()
+
 # =========================
 # CONFIG
 # =========================
@@ -554,6 +558,8 @@ def on_message(ws, message):
 if __name__ == "__main__":
     print("🚀 BOT PERFECTO + FILTRO ACTIVADO", flush=True)
 
+    iniciar_web()
+
     def run_bot():
         enviar_telegram("🤖 BOT CON FILTRO INTELIGENTE ACTIVADO")
 
@@ -568,9 +574,4 @@ if __name__ == "__main__":
             on_message=on_message
         ).run_forever()
 
-    # 🔥 SOLO UN THREAD DEL BOT
-    threading.Thread(target=run_bot, daemon=True).start()
-
-    # 🔥 FLASK SIN RELOADER (CLAVE)
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port, use_reloader=False)
+    threading.Thread(target=run_bot).start()
