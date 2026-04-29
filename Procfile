@@ -1,0 +1,1 @@
+web: python bot_binance_futuros.py
