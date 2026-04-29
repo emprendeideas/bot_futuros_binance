@@ -1,4 +1,4 @@
-websocket-client
-requests
 flask
+requests
+websocket-client
 python-telegram-bot==13.15
