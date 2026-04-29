@@ -61,7 +61,7 @@ detener_bot_total = False
 
 nivel_actual = 1
 
-EMA_LENGTH = 30
+EMA_LENGTH = 2
 
 # =========================
 # TELEGRAM SIMPLE
