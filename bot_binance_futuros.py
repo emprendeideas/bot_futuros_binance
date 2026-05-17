@@ -250,7 +250,7 @@ def verificar_ganancia():
 
     if ganancia >= nivel_actual:
         nivel_detectado = nivel_actual
-        nivel_actual += 1
+        nivel_actual += 5
 
         enviar_telegram(
             f"🎯 ¡Objetivo alcanzado!\n\n"
@@ -741,8 +741,8 @@ def polling_loop():
                 continue
 
             # 🔥 IMPORTANTE:
-            # usamos la vela cerrada REAL
-            k = data[-2]
+            # usamos la vela cerrada
+            k = data[-1]
 
             candle_time = k[6]
 
@@ -763,10 +763,10 @@ def polling_loop():
 
             ultimo_precio = candle["close"]
 
-        #   print(
-        #       f"📩 Nueva vela: {ultimo_precio}",
-        #       flush=True
-        #   )
+            print(
+                f"📩 Nueva vela: {ultimo_precio}",
+                flush=True
+            )
 
             # 🔥 STOP LOSS
             if verificar_stop_loss():
