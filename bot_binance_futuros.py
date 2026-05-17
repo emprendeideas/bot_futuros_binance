@@ -57,8 +57,8 @@ bot_activo = True
 detener_bot_total = False
 
 nivel_actual = 1
-SL_PORCENTAJE = -1.7 
-EMA_LENGTH = 2
+SL_PORCENTAJE = -0.5
+EMA_LENGTH = 49
 
 # =========================
 # TELEGRAM SIMPLE
